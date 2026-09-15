@@ -50,7 +50,7 @@ Release the test set whenever suits the unit — for example after CW1 has been 
 **`SelfRatedHealth`** — the 5-class EDA target for CW1. In CW2 it is a **leakage trap**: it must be
 excluded from the feature set, because (a) it comes from a survey that is not run on the deployment
 population, and (b) it shares a latent frailty term with the outcome, so it is a partial observation
-of the thing being predicted. Including it gains +0.031 AUC. It is then useful again for CW2 error
+of the thing being predicted. Including it gains +0.030 AUC. It is then useful again for CW2 error
 analysis, as a segmentation variable.
 
 **`HighHealthBurden`** — binary: did this person have ≥14 days of health-related absence, **or** ≥6
@@ -66,11 +66,16 @@ All figures below are measured on the development set with anomalies and missing
 
 | Feature | r | | Feature | r |
 |---|---|---|---|---|
-| Health Issues | **−0.42** | | Physical Activity | **+0.33** |
-| Sleep Quality | **+0.37** | | Stress Level | **−0.31** |
-| Resting Heart Rate | −0.25 | | BMI | −0.25 |
-| Smoking Status | −0.24 | | Age | −0.16 |
+| Health Issues | **−0.47** | | Physical Activity | **+0.33** |
+| Sleep Quality | **+0.38** | | Stress Level | **−0.31** |
+| BMI | −0.27 | | Smoking Status | −0.26 |
+| Resting Heart Rate | −0.26 | | Age | −0.18 |
 | Sleep Hours | +0.18 | | Household Income | +0.05 |
+
+`SelfRatedHealth` itself is distributed Poor 8% / Fair 17% / Good 40% / Very Good 25% /
+Excellent 10%, and the high-burden rate within those levels runs 65.7% / 40.0% / 16.0% / 5.1% /
+1.6% — strongly informative about the CW2 target without being deterministic, which is what makes
+it a usable leakage trap.
 
 ### Strong feature-to-feature relationships
 
@@ -143,13 +148,13 @@ through behaviour:
 
 ### Two further discoveries
 
-**Women rate their health worse than men** (mean 2.17 vs 2.24 on the 0–4 scale) despite near-identical
+**Women rate their health worse than men** (mean 2.09 vs 2.18 on the 0–4 scale) despite near-identical
 rates of diagnosed health issues (43.3% vs 43.0%) and a *higher* high-burden rate (20.5% vs 18.9%) —
 a well-documented reporting asymmetry, and a good prompt for discussing self-report as a measure.
 
 **Vapers report better health than smokers but fare worse.** Mean self-rated health places vaping
-between former and light smoking (2.07 vs 1.93), while the high-burden rate places it above light
-smoking (31.8% vs 29.4%). This is deliberate — see §7.
+between former (2.11) and light smoking (1.83) at 1.98, while the high-burden rate places it
+*above* light smoking (31.8% vs 29.4%). This is deliberate — see §7.
 
 ---
 
@@ -234,7 +239,7 @@ generator is ever retuned, run it or the assignment quietly stops working.
 | Rung | Change | Headline effect |
 |---|---|---|
 | 0 | Predict the majority class | accuracy **0.802**, recall 0 |
-| 1 | **Starter pipeline** — defaults, unscaled, single split, accuracy | accuracy **0.802**, **recall 0.000** — logistic regression predicts "no" for everybody; KNN scores 0.766, *below* the baseline |
+| 1 | **Starter pipeline** — defaults, unscaled, single split, accuracy | **both models score below the 0.802 trivial baseline**: LR 0.797 finding 4 of 293 cases, KNN 0.766 finding 17 |
 | 2 | Repair anomalies, impute rather than drop | +35% training rows; GBM +0.005 test AUC, LR slightly worse. **Justified on bias, not accuracy** |
 | 3 | Feature scaling | KNN AUC **0.525 → 0.768**. Barely affects logistic regression |
 | 4 | Class weighting or SMOTE | recall **0.326 → 0.755**; balanced accuracy +0.09; agency cost **+€154 → −€3** per person |
@@ -242,7 +247,7 @@ generator is ever retuned, run it or the assignment quietly stops working.
 | 6 | Cross-validation / repeated hold-out | two models with means **0.5800 and 0.5802** swap rank on **4/10** splits |
 | 7 | Gradient boosting / random forest | **+0.056 AUC** over tuned logistic regression |
 | 8 | Threshold chosen from the cost matrix | best saving **€145/person**; **the two stakeholders prefer different models** |
-| 9 | Spotting the leak | including `SelfRatedHealth` gives +0.031 AUC / +2.3pp accuracy |
+| 9 | Spotting the leak | including `SelfRatedHealth` gives +0.030 AUC / +2.7pp accuracy |
 | 10 | Train vs CV vs test | **0.925 → 0.851 → 0.826** |
 
 ### Traps worth marking for
@@ -277,8 +282,8 @@ whom?".
 
 **Vaping is modelled as carrying more near-term health burden than light smoking, while being
 self-rated as less serious.** The smoking dose-response is therefore clean on `SelfRatedHealth`
-(Never → Former → Vaper → Light → Heavy) but *not* on `HighHealthBurden`, where Vaper (31.8%) sits
-above Light Smoker (29.4%).
+(2.32 → 2.11 → 1.98 → 1.83 → 1.23) but *not* on `HighHealthBurden`, where Vaper (31.8%) sits above
+Light Smoker (29.4%).
 
 This is intentional and does two jobs: it gives CW1 a genuine insight about self-report diverging
 from outcomes, and it gives CW2 a subgroup that is rare in training (2.7%, n≈201) but common in test

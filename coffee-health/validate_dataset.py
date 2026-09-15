@@ -87,9 +87,15 @@ def validate_cohort(df, name, *, expect_missing):
     section('Categorical distributions')
     for col, order in ORDERS.items():
         observed = df[col].value_counts(normalize=True, dropna=True)
+        # Both directions matter. An earlier version only checked for UNEXPECTED levels,
+        # which let a silently missing SelfRatedHealth class through unnoticed.
         check(f'{col} uses only its defined levels',
               set(observed.index) <= set(order),
               ', '.join(f'{k} {v:.1%}' for k, v in observed.reindex(order).dropna().items()))
+        check(f'{col} has every defined level present',
+              set(order) <= set(observed.index),
+              'all present' if set(order) <= set(observed.index)
+              else f'MISSING: {sorted(set(order) - set(observed.index))}')
 
     section('Missing values')
     missing = df.isna().sum()

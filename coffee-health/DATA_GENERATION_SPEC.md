@@ -40,7 +40,8 @@ Binary. **Did this person have a high-burden health year in the twelve months af
 Drawn as `y ~ Bernoulli(sigmoid(eta))` — a **stochastic draw, not a threshold**, so there is
 irreducible noise and a realistic ceiling rather than a boundary a flexible model could learn
 perfectly. Calibrated to a **~20% positive rate**, which sets the majority-class baseline at 80%
-accuracy: the supplied starter pipeline then scores ~80% while finding nobody.
+accuracy: the supplied starter pipeline then scores ~80% while finding almost nobody, and in
+fact lands slightly below that trivial baseline.
 
 `eta` has three blocks. The split matters, and is the single most important design decision in v3.
 
@@ -83,8 +84,10 @@ factor, which is both the mechanism of the trap and real epidemiology: self-rate
 later mortality and utilisation after adjusting for measured risk factors, because respondents
 incorporate information no questionnaire captures.
 
-Measured effect of including it: **+0.031 AUC, +2.3pp accuracy** — seductive, detectable, and
-not so total that the exercise becomes trivial.
+Measured effect of including it: **+0.030 AUC, +2.7pp accuracy** — seductive, detectable, and
+not so total that the exercise becomes trivial. Within each self-rated-health level the
+high-burden rate runs 65.7% (Poor) down to 1.6% (Excellent): strongly informative, nowhere near
+deterministic.
 
 ### Two cohorts
 
@@ -135,13 +138,13 @@ Enforced by `validate_ml_ladder.py` (23 checks) and `validate_dataset.py` (67 ch
 | Property | Target | Measured |
 |---|---|---|
 | Majority-class accuracy | ~0.80 | 0.802 |
-| Starter pipeline recall | ≤0.45 | 0.000 (predicts all-negative) |
+| Starter pipeline recall | ≤0.45 | 0.014 — below the trivial baseline on accuracy too |
 | Scaling: KNN AUC gain | ≥+0.10 | +0.243 |
 | Class weighting: recall | ≥0.60 | 0.326 → 0.755 |
 | Tuning: KNN AUC gain | ≥+0.03 | +0.086 |
 | Hold-out instability | a pair of models must swap rank | swaps on 4/10 splits |
 | Tree ensemble over LR | +0.03 to +0.10 AUC | +0.056 |
-| Leakage gain | +0.015 to +0.08 AUC | +0.031 |
+| Leakage gain | +0.015 to +0.08 AUC | +0.030 |
 | Stakeholder disagreement | different models preferred at 0.5 | agency → LR balanced, employer → GBM |
 | Overfitting: train − CV | ≥+0.03 | +0.073 |
 | Drift: CV − test | +0.015 to +0.08 | +0.025 |

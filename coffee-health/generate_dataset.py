@@ -433,7 +433,13 @@ def generate(config: CohortConfig, n_rows: int, seed: int, thresholds: dict | No
     frailty = rng.normal(0, 1, size=n)
 
     # Level 6: SelfRatedHealth (the 5-class EDA target, and CW2's leakage trap)
-    srh_score = np.clip(
+    # NOT clipped. An earlier version clipped this to [0, 100]; once the frailty term
+    # was added, 8.6% of scores hit the floor, which exceeded the 8th-percentile
+    # threshold -- so the first cut-point WAS zero, searchsorted(side='right') pushed
+    # every clipped row up a bucket, and the 'Poor' class vanished entirely from the
+    # data. The score is internal and the thresholds are quantile-based, so clipping
+    # bought nothing and silently destroyed a class.
+    srh_score = (
         60
         + df['Country'].map(COUNTRY_OFFSET_SRH).to_numpy()
         + df['Gender'].map(GENDER_SRH_ADJ).to_numpy()
@@ -445,8 +451,7 @@ def generate(config: CohortConfig, n_rows: int, seed: int, thresholds: dict | No
         + df['Stress Level'].map(STRESS_SRH_ADJ).to_numpy()
         + df['Health Issues'].map(HEALTH_SRH_ADJ).to_numpy()
         + SRH_FRAILTY * frailty
-        + rng.normal(0, 8, size=n),
-        0, 100
+        + rng.normal(0, 8, size=n)
     )
     # Poor 8%, Fair 17%, Good 40%, Very Good 25%, Excellent 10%.
     if computing_thresholds:
