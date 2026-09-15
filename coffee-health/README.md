@@ -1,6 +1,81 @@
 # Coffee & Health Dataset
 
-A synthetic dataset on coffee consumption, lifestyle, and self-rated health, designed for teaching **Exploratory Data Analysis (EDA)** and **Machine Learning classification** to students. Built as a redesign of a modified [Kaggle "Global Coffee Health Dataset"](https://www.kaggle.com/datasets/uom190346a/global-coffee-health-dataset) whose features had no meaningful correlations — see `DATA_GENERATION_SPEC.md` for the full limitations analysis.
+**Version 3 is current.** v3 repurposes the dataset to carry a two-assignment unit — CW1 on
+exploratory data analysis, CW2 on applied machine learning — by adding a binary ML target, two
+stakeholder cost matrices, and a **held-out test set** drawn from a shifted recruitment wave.
+
+- **Why it is built this way:** [V3_COURSEWORK_DESIGN.md](V3_COURSEWORK_DESIGN.md)
+- **The stakeholder scenario and cost matrices (brief-ready):** [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md)
+- **What the numbers are:** [DATA_GENERATION_SPEC.md](DATA_GENERATION_SPEC.md) → Version 3 section
+- **How they are produced:** [DATA_GENERATION_ALGORITHM.md](DATA_GENERATION_ALGORITHM.md)
+
+## Files
+
+| File | What it is |
+|---|---|
+| `coffee_health_v3_dev.csv` | **Development set** — 10,040 rows, messy, labelled. Students do everything here. |
+| `coffee_health_v3_test.csv` | **Held-out test set** — 3,060 rows, no missing values, from a shifted cohort. The common benchmark. |
+| `cw2_starter_notebook.ipynb` | The deliberately weak pipeline students are handed. |
+| `cw2_reference_notebook.ipynb` | Instructor-facing worked solution, validation, and the "beat this" benchmark. |
+| `costs.py` | Both cost matrices, cost helpers, and the analytic optimal threshold. Students get this. |
+| `generate_dataset.py` | Produces both CSVs, seeded. |
+| `validate_dataset.py` | 67 checks: ranges, distributions, quality issues, and every intended shift. |
+| `validate_ml_ladder.py` | 23 checks that each rung of the CW2 improvement ladder actually pays off. |
+| `dataset_validation.ipynb` | The v2 data-validation notebook (EDA and quality issues). |
+| `data/` | Original source data and the archived v2 dataset. |
+
+## Regenerating and checking
+
+```bash
+python3 generate_dataset.py --seed 42     # writes both CSVs
+python3 validate_dataset.py               # 67 checks -> exit code
+python3 validate_ml_ladder.py             # 23 checks -> exit code
+```
+
+`validate_ml_ladder.py` is the important one if the generator is ever retuned: it is what
+guarantees the assignment still works. Two gotchas are documented in the algorithm doc — quadratic
+terms must stay centred on the observed distribution, and the test cohort must reuse the
+development set's quantile thresholds.
+
+## The two targets
+
+| Target | Type | Used for |
+|---|---|---|
+| `SelfRatedHealth` | 5-class ordinal | **CW1's** EDA target. In **CW2** it is the leakage trap (it must be excluded from the feature set) and then the error-analysis segmentation variable. |
+| `HighHealthBurden` | binary, ~20% positive | **CW2's** ML target: ≥14 days health-related absence or ≥6 primary-care contacts in the following 12 months. |
+
+## The two stakeholders
+
+Both want to identify the same people for a preventive programme, and pay very differently for
+mistakes — so they can rank the same models differently. Full scenario in
+[STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md).
+
+| | FP | FN | Optimal threshold |
+|---|---|---|---|
+| National public health agency | €180 | €1,450 | **0.077** — wants recall |
+| Employer occupational health | €520 | €780 | **0.377** — wants precision |
+
+## Test-set rules
+
+The test set is a clean extract: **no missing values**, so results cannot hinge on how a student
+handled missing data. The only operations permitted on it are **encoding and scaling** — never
+cleaning, imputation, or resampling.
+
+It *does* carry anomalies (3.0% age, 2.5% BMI) and duplicates (2.0%, 83% of them UK). Those are
+there to be **found and explained, not repaired**. Together with the covariate shift they account
+for test performance sitting below the cross-validated estimate.
+
+## Why test performance is lower — three separable layers
+
+1. **Optimism / overfitting** — training-set accuracy 0.925 vs 5-fold CV 0.851.
+2. **Corrupted rows** — a higher anomaly rate produces rows that are near-unpredictable by
+   construction, plus duplicates that double-count some errors.
+3. **Covariate shift** — UK 25%→47%, mean age 40.7→46.2, vaping 2.7%→9.7%, positive rate
+   19.8%→25.6%. The rise in positive rate looks like label shift but is **compositional**: the
+   model stays calibrated on the test set (predicted 0.259 vs observed 0.256), so the relationship
+   between features and outcome did not change — only who was recruited.
+
+---
 
 ## Dataset Overview
 

@@ -21,7 +21,7 @@ dataset-generation/
 │   ├── generated_gaming_dataset.csv   # Output of generate_dataset.py
 │   └── data/
 │       └── online_gaming_original.csv # Original source dataset (pre-improvement)
-└── coffee-health/                     # Dataset 2 — complete
+└── coffee-health/                     # Dataset 2 — complete (v3)
     ├── README.md                          # Dataset overview
     ├── DATA_GENERATION_SPEC.md            # Feature spec, relationships, data quality issues
     ├── DATA_GENERATION_ALGORITHM.md       # Exact generation algorithm/formulas
@@ -43,7 +43,7 @@ Every dataset folder is self-contained: its own README, spec, scripts, `requirem
 | Folder | Status | Topic |
 |---|---|---|
 | [online-gaming/](online-gaming/) | Complete | Online gaming behavior (playtime, engagement, spending) |
-| [coffee-health/](coffee-health/) | Complete | Coffee consumption, lifestyle, and self-rated health across Italy/France/UK/Norway |
+| [coffee-health/](coffee-health/) | Complete (v3) | Coffee consumption, lifestyle, and health across Italy/France/UK/Norway. v3 adds a binary ML target, two stakeholder cost matrices, and a held-out test set with distribution shift, to carry a two-assignment EDA + applied-ML unit |
 
 ## The Process
 

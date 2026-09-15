@@ -37,11 +37,42 @@ Synthetic online gaming behavior dataset, ~10,000 player-game combination rows a
 - Design goals achieved: logical correlations (e.g. PlayTimeHours ↔ PlayerLevel), demographic influences on genre/spending preferences, multi-factorial (non-deterministic) target variables, and intentional data quality issues (duplicates, age-typo anomalies, missing values) for teaching data cleaning
 - Full detail: `online-gaming/README.md`, `online-gaming/DATA_GENERATION_SPEC.md`, `online-gaming/DATA_GENERATION_ALGORITHM.md`
 
-### coffee-health/ (first version complete, pending manual review)
+### coffee-health/ (v3 complete — coursework redesign)
 
-Synthetic coffee consumption / lifestyle / self-rated health dataset, 10,040 rows (10,000 people + intentional duplicates) across Italy, France, UK, and Norway, improving on a modified Kaggle "Global Coffee Health Dataset" whose features had no meaningful correlations (e.g. Sleep Quality was purely a function of Sleep Hours, Stress Level was a 100% deterministic relabeling of Sleep Quality).
+Synthetic coffee consumption / lifestyle / health dataset across Italy, France, UK and Norway,
+improving on a modified Kaggle "Global Coffee Health Dataset" whose features had no meaningful
+correlations (e.g. Sleep Quality was purely a function of Sleep Hours, Stress Level a 100%
+deterministic relabeling of Sleep Quality).
 
-- Original dataset: `coffee-health/data/coffee_health_original.csv`; limitations quantified in `coffee-health/analyze_original_dataset.py`
-- Single target: `SelfRatedHealth` {Poor, Fair, Good, Very Good, Excellent} — a real public-health survey construct, built as a multi-factor composite (Health Issues, BMI, Sleep Quality, Physical Activity, Smoking, Stress, Age, Country, Gender), calibrated against sourced country-level statistics
-- Full detail: `coffee-health/README.md`, `coffee-health/DATA_GENERATION_SPEC.md`, `coffee-health/DATA_GENERATION_ALGORITHM.md`
-- **Complete.** Spec, `generate_dataset.py` + `validate_dataset.py` (all checks passing), and `dataset_validation.ipynb` (the step-d review notebook — executes cleanly end-to-end, ~65% RF accuracy on the 5-class target, confirms all the intentional data quality issues and EDA patterns behave as designed) are all done, and the user has reviewed and approved the dataset. No student-facing notebook is planned — that was never requested; this dataset's notebook deliverable is the review notebook, full stop.
+- Original dataset: `coffee-health/data/coffee_health_original.csv`; limitations quantified in `coffee-health/analyze_original_dataset.py`. v2 archived at `coffee-health/data/coffee_health_v2.csv`.
+- Full detail: `coffee-health/README.md`, `V3_COURSEWORK_DESIGN.md`, `STAKEHOLDERS_AND_COSTS.md`, `DATA_GENERATION_SPEC.md`, `DATA_GENERATION_ALGORITHM.md`
+
+**v1/v2 (complete, approved).** Single 5-class target `SelfRatedHealth`, 10,040 rows, built as a
+multi-factor composite calibrated against sourced country-level statistics, plus
+`dataset_validation.ipynb` (the step-d instructor review notebook).
+
+**v3 (complete) — repurposed to carry a two-assignment unit**: CW1 on EDA, CW2 (60%) on applied
+ML. The driving problems were that CW2 had become coding-heavy and AI-homogenised, that CW1 and
+CW2 were weakly linked, and that students did not connect results to the real world. The response
+moves marks onto evaluation and critical analysis rather than pipeline code.
+
+What v3 adds:
+
+- **`HighHealthBurden`** — binary ML target (~20% positive), drawn as a Bernoulli from a sigmoid. Its latent model carries genuine non-additive structure (U-shaped sleep, J-shaped coffee, continuous products, broad categorical interactions) *because v2's purely additive composite put logistic regression near Bayes-optimal, so "use a better model" would have gained nothing*.
+- **A latent frailty term**, shared by both targets and never written to the CSV. This is what makes `SelfRatedHealth` a genuine leakage trap rather than a redundant function of columns already present.
+- **`Household Income`** — large in magnitude, weak in direct signal, so feature scaling has something real to fix.
+- **Two stakeholder cost matrices** with opposing trade-offs (`costs.py`, `STAKEHOLDERS_AND_COSTS.md`), so model ranking legitimately reverses and "which model is best?" requires "best for whom?".
+- **Two files**: `coffee_health_v3_dev.csv` (messy) and `coffee_health_v3_test.csv` (**no missing values**; carries anomalies and duplicates for analysis only, never repair). Covariate shift only — `P(y|x_clean)` is identical, so the apparent label shift is compositional.
+- **`cw2_starter_notebook.ipynb`** (deliberately weak; the student starting point) and **`cw2_reference_notebook.ipynb`** (instructor worked solution, validation, and the "beat this" benchmark).
+- **`validate_ml_ladder.py`** — 23 assertions that each rung of the improvement ladder pays off. This is the guard: if the generator is ever retuned, run it, or the assignment quietly stops working.
+
+Two failure modes are documented in `DATA_GENERATION_ALGORITHM.md` and worth knowing before
+touching the generator: quadratic terms must be centred on the **observed** distribution (an
+off-centre quadratic is near-linear across the support and a linear model gets it for free), and
+the test cohort must **reuse the development set's quantile thresholds** (recomputing them
+re-normalises the ordinal composites and silently erases the shift).
+
+Note that the earlier "no student-facing notebook is planned" position applied to v1/v2 and has
+been superseded: the CW2 starter notebook was explicitly requested for v3. The general default
+still stands — review notebooks are instructor-facing unless a student-facing artifact is asked
+for as its own task.
