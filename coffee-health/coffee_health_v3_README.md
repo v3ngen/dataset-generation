@@ -43,7 +43,7 @@ Release the test set whenever suits the unit — for example after CW1 has been 
 | 15 | `Sleep Quality` | ord | Poor / Fair / Good / Excellent |
 | 16 | `Health Issues` | ord | No Issues / Mild / Moderate / Severe |
 | 17 | `SelfRatedHealth` | ord | **CW1 target.** Poor → Excellent |
-| 18 | `HighHealthBurden` | binary | **CW2 target.** ~20% positive |
+| 18 | `HighHealthNeeds` | binary | **CW2 target.** ~20% positive |
 
 ### The two targets
 
@@ -53,7 +53,7 @@ population, and (b) it shares a latent frailty term with the outcome, so it is a
 of the thing being predicted. Including it gains +0.030 AUC. It is then useful again for CW2 error
 analysis, as a segmentation variable.
 
-**`HighHealthBurden`** — binary: did this person have ≥14 days of health-related absence, **or** ≥6
+**`HighHealthNeeds`** — binary: did this person have ≥14 days of health-related absence, **or** ≥6
 primary-care contacts, in the twelve months after the survey? Development 19.8% positive, test 25.6%.
 
 ---
@@ -73,7 +73,7 @@ All figures below are measured on the development set with anomalies and missing
 | Sleep Hours | +0.18 | | Household Income | +0.05 |
 
 `SelfRatedHealth` itself is distributed Poor 8% / Fair 17% / Good 40% / Very Good 25% /
-Excellent 10%, and the high-burden rate within those levels runs 65.7% / 40.0% / 16.0% / 5.1% /
+Excellent 10%, and the high-needs rate within those levels runs 65.7% / 40.0% / 16.0% / 5.1% /
 1.6% — strongly informative about the CW2 target without being deterministic, which is what makes
 it a usable leakage trap.
 
@@ -92,13 +92,13 @@ correlation matrix.
 
 | Cups/day | 0–1 | 1–2 | 2–3 | 3–4 | 4+ |
 |---|---|---|---|---|---|
-| High-burden rate | **30.6%** | 19.4% | **16.8%** | 18.3% | **23.7%** |
+| High-needs rate | **30.6%** | 19.4% | **16.8%** | 18.3% | **23.7%** |
 
 **The sleep U-curve.** Both short *and* long sleep are harmful:
 
 | Hours | <4.5 | 4.5–5.5 | 5.5–6.5 | 6.5–7.5 | 7.5–8.5 | >8.5 |
 |---|---|---|---|---|---|---|
-| High-burden rate | **75.0%** | 34.7% | 13.5% | **9.3%** | 14.6% | **42.0%** |
+| High-needs rate | **75.0%** | 34.7% | 13.5% | **9.3%** | 14.6% | **42.0%** |
 
 ### Interactions worth finding
 
@@ -135,25 +135,25 @@ through behaviour:
 | Share sedentary | 26.9% | 27.9% | 25.2% | 20.9% | **17.7%** |
 | Share smoking | 21.2% | 22.1% | 18.1% | 17.9% | **15.3%** |
 | Mean BMI | 26.6 | 26.4 | 26.5 | 26.2 | **26.0** |
-| High-burden rate | 21.8% | 19.0% | 21.2% | 19.0% | **16.9%** |
+| High-needs rate | 21.8% | 19.0% | 21.2% | 19.0% | **16.9%** |
 
 ### Country profiles
 
 | | Norway | Italy | France | UK |
 |---|---|---|---|---|
 | "Good or better" health | **83.2%** | 78.0% | 71.7% | **69.6%** |
-| High-burden rate | 14.7% | 15.3% | 23.7% | **24.7%** |
+| High-needs rate | 14.7% | 15.3% | 23.7% | **24.7%** |
 | Coffees / caffeine | 3.17 / **319mg** | 3.01 / 178mg | 2.37 / 174mg | **1.80** / **116mg** |
 | Mean BMI | 25.8 | 25.0 | 26.6 | **27.9** |
 
 ### Two further discoveries
 
 **Women rate their health worse than men** (mean 2.09 vs 2.18 on the 0–4 scale) despite near-identical
-rates of diagnosed health issues (43.3% vs 43.0%) and a *higher* high-burden rate (20.5% vs 18.9%) —
+rates of diagnosed health issues (43.3% vs 43.0%) and a *higher* high-needs rate (20.5% vs 18.9%) —
 a well-documented reporting asymmetry, and a good prompt for discussing self-report as a measure.
 
 **Vapers report better health than smokers but fare worse.** Mean self-rated health places vaping
-between former (2.11) and light smoking (1.83) at 1.98, while the high-burden rate places it
+between former (2.11) and light smoking (1.83) at 1.98, while the high-needs rate places it
 *above* light smoking (31.8% vs 29.4%). This is deliberate — see §7.
 
 ---
@@ -282,13 +282,13 @@ whom?".
 
 **Vaping is modelled as carrying more near-term health burden than light smoking, while being
 self-rated as less serious.** The smoking dose-response is therefore clean on `SelfRatedHealth`
-(2.32 → 2.11 → 1.98 → 1.83 → 1.23) but *not* on `HighHealthBurden`, where Vaper (31.8%) sits above
+(2.32 → 2.11 → 1.98 → 1.83 → 1.23) but *not* on `HighHealthNeeds`, where Vaper (31.8%) sits above
 Light Smoker (29.4%).
 
 This is intentional and does two jobs: it gives CW1 a genuine insight about self-report diverging
 from outcomes, and it gives CW2 a subgroup that is rare in training (2.7%, n≈201) but common in test
 (9.7%) and higher-risk than the model will have learned. If you would rather the dose-response be
-monotonic on both targets, set `HHB_SMOKING['Vaper']` to below the `Light Smoker` value in
+monotonic on both targets, set `HHN_SMOKING['Vaper']` to below the `Light Smoker` value in
 `generate_dataset.py` (currently 0.60 vs 0.45), then regenerate and re-run both validators.
 
 ---

@@ -1,4 +1,4 @@
-ID,Country,Age,Gender,Household Income,Smoking Status,Alcohol Level,Daily Coffees,Caffeine Intake,Stress Level,Physical Activity Level,BMI,Avg Resting Heart Rate,Avg Sleep Hours Per Night,Sleep Quality,Health Issues,SelfRatedHealth,HighHealthBurden
+ID,Country,Age,Gender,Household Income,Smoking Status,Alcohol Level,Daily Coffees,Caffeine Intake,Stress Level,Physical Activity Level,BMI,Avg Resting Heart Rate,Avg Sleep Hours Per Night,Sleep Quality,Health Issues,SelfRatedHealth,HighHealthNeeds
 1,Norway,44.0,Male,36100.0,Light Smoker,Heavy,4.0,495.2,Medium,Moderately Active,24.7,,4.1,Poor,Mild,Fair,1
 2,Norway,32.0,Female,74200.0,Light Smoker,Light,1.7,168.5,Medium,Very Active,18.9,81.0,,Good,No Issues,Very Good,0
 3,Italy,47.0,Female,44400.0,Never,Moderate,2.9,196.7,Low,Lightly Active,25.1,83.0,,Excellent,No Issues,Good,0

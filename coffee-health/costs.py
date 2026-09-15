@@ -1,7 +1,7 @@
 """Cost matrices for the two stakeholders in the Coffee Health v3 coursework.
 
-Both stakeholders want to identify people who will have a high-burden health year
-(``HighHealthBurden == 1``) so they can invite them onto a preventive programme.
+Both stakeholders want to identify people who will have a year of high health needs
+(``HighHealthNeeds == 1``) so they can invite them onto a preventive programme.
 They pay very different prices for getting it wrong, so they will not necessarily
 agree about which model is best.
 
@@ -59,7 +59,7 @@ COST_MATRICES = {
 def confusion_counts(y_true, y_pred) -> dict:
     """Return ``{'TN':.., 'FP':.., 'FN':.., 'TP':..}`` for binary 0/1 labels.
 
-    The positive class (1) means "will have a high-burden health year".
+    The positive class (1) means "will have a year of high health needs".
     """
     y_true = np.asarray(y_true).astype(int)
     y_pred = np.asarray(y_pred).astype(int)

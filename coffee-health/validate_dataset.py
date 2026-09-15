@@ -37,7 +37,7 @@ EXPECTED_COLUMNS = [
     'Alcohol Level', 'Daily Coffees', 'Caffeine Intake', 'Stress Level',
     'Physical Activity Level', 'BMI', 'Avg Resting Heart Rate',
     'Avg Sleep Hours Per Night', 'Sleep Quality', 'Health Issues',
-    'SelfRatedHealth', 'HighHealthBurden',
+    'SelfRatedHealth', 'HighHealthNeeds',
 ]
 
 RESULTS = []
@@ -68,9 +68,9 @@ def validate_cohort(df, name, *, expect_missing):
           list(df.columns) == EXPECTED_COLUMNS,
           f'{len(df.columns)} columns')
     check('target is never missing',
-          df['HighHealthBurden'].notna().all() and df['SelfRatedHealth'].notna().all())
-    check('HighHealthBurden is binary 0/1',
-          set(df['HighHealthBurden'].unique()) <= {0, 1})
+          df['HighHealthNeeds'].notna().all() and df['SelfRatedHealth'].notna().all())
+    check('HighHealthNeeds is binary 0/1',
+          set(df['HighHealthNeeds'].unique()) <= {0, 1})
 
     section('Ranges (anomaly-tolerant bounds)')
     for col, lo, hi in [('Age', 13, 999),            # >100 are doubled-digit typos
@@ -156,7 +156,7 @@ def validate_cohort(df, name, *, expect_missing):
     section('Targets')
     srh = df['SelfRatedHealth'].value_counts(normalize=True).reindex(ORDERS['SelfRatedHealth'])
     print('    SelfRatedHealth: ' + ', '.join(f'{k} {v:.1%}' for k, v in srh.items()))
-    print(f'    HighHealthBurden positive rate: {df["HighHealthBurden"].mean():.1%}')
+    print(f'    HighHealthNeeds positive rate: {df["HighHealthNeeds"].mean():.1%}')
     good_plus = df.groupby('Country')['SelfRatedHealth'].apply(
         lambda s: s.isin(['Good', 'Very Good', 'Excellent']).mean())
     print('    "good or better" by country: '
@@ -193,7 +193,7 @@ def validate_shift(dev, test):
     check('vaping is far more common in the test cohort', vape_test > vape_dev * 2.5,
           f'{vape_dev:.1%} -> {vape_test:.1%}')
 
-    pos_dev, pos_test = dev['HighHealthBurden'].mean(), test['HighHealthBurden'].mean()
+    pos_dev, pos_test = dev['HighHealthNeeds'].mean(), test['HighHealthNeeds'].mean()
     check('the positive rate rises (the apparent label shift)', pos_test > pos_dev + 0.03,
           f'{pos_dev:.1%} -> {pos_test:.1%}')
 
@@ -211,7 +211,7 @@ def validate_shift(dev, test):
     band = lambda d: pd.cut(d['Age'].where(d['Age'] <= 100), [0, 30, 45, 60, 100])
     keys_dev = [dev['Country'], band(dev), dev['Smoking Status']]
     keys_test = [test['Country'], band(test), test['Smoking Status']]
-    dev_rates = dev.groupby(keys_dev, observed=True)['HighHealthBurden'].mean()
+    dev_rates = dev.groupby(keys_dev, observed=True)['HighHealthNeeds'].mean()
     test_mix = test.groupby(keys_test, observed=True).size() / len(test)
     shared = dev_rates.index.intersection(test_mix.index)
     expected = float((dev_rates[shared] * test_mix[shared]).sum())
@@ -230,8 +230,8 @@ def validate_shift(dev, test):
         d = dev[dev['Country'] == country]
         t = test[test['Country'] == country]
         for lo, hi in [(30, 45), (45, 60)]:
-            dm = d[(d['Age'] > lo) & (d['Age'] <= hi)]['HighHealthBurden'].mean()
-            tm = t[(t['Age'] > lo) & (t['Age'] <= hi)]['HighHealthBurden'].mean()
+            dm = d[(d['Age'] > lo) & (d['Age'] <= hi)]['HighHealthNeeds'].mean()
+            tm = t[(t['Age'] > lo) & (t['Age'] <= hi)]['HighHealthNeeds'].mean()
             print(f'    {country:<7} age {lo}-{hi}:  dev {dm:.3f}  test {tm:.3f}  ({tm - dm:+.3f})')
     # A coarse stability check; validate_ml_ladder.py's calibration test is the strict one.
     joint = []
@@ -240,7 +240,7 @@ def validate_shift(dev, test):
             d = dev[(dev['Country'] == country) & (dev['Age'] > lo) & (dev['Age'] <= hi)]
             t = test[(test['Country'] == country) & (test['Age'] > lo) & (test['Age'] <= hi)]
             if len(d) >= 100 and len(t) >= 50:
-                joint.append(t['HighHealthBurden'].mean() - d['HighHealthBurden'].mean())
+                joint.append(t['HighHealthNeeds'].mean() - d['HighHealthNeeds'].mean())
     check('within country x age band, the outcome rate barely moves',
           abs(float(np.mean(joint))) <= 0.06,
           f'mean difference {np.mean(joint):+.3f} across {len(joint)} cells')

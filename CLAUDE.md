@@ -58,7 +58,7 @@ moves marks onto evaluation and critical analysis rather than pipeline code.
 
 What v3 adds:
 
-- **`HighHealthBurden`** — binary ML target (~20% positive), drawn as a Bernoulli from a sigmoid. Its latent model carries genuine non-additive structure (U-shaped sleep, J-shaped coffee, continuous products, broad categorical interactions) *because v2's purely additive composite put logistic regression near Bayes-optimal, so "use a better model" would have gained nothing*.
+- **`HighHealthNeeds`** — binary ML target (~20% positive), drawn as a Bernoulli from a sigmoid. Its latent model carries genuine non-additive structure (U-shaped sleep, J-shaped coffee, continuous products, broad categorical interactions) *because v2's purely additive composite put logistic regression near Bayes-optimal, so "use a better model" would have gained nothing*.
 - **A latent frailty term**, shared by both targets and never written to the CSV. This is what makes `SelfRatedHealth` a genuine leakage trap rather than a redundant function of columns already present.
 - **`Household Income`** — large in magnitude, weak in direct signal, so feature scaling has something real to fix.
 - **Two stakeholder cost matrices** with opposing trade-offs (`costs.py`, `STAKEHOLDERS_AND_COSTS.md`), so model ranking legitimately reverses and "which model is best?" requires "best for whom?".

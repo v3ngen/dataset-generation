@@ -17,7 +17,7 @@ Level 3 (Physiology):          BMI, Avg Resting Heart Rate
 Level 4 (Sleep):               Avg Sleep Hours Per Night, Sleep Quality
 Level 5 (Chronic health):      Health Issues
 Level 6 (Target):              SelfRatedHealth
-Level 7 (v3 target):           HighHealthBurden
+Level 7 (v3 target):           HighHealthNeeds
 Level 8 (Data quality issues): missing values, then Age/BMI anomalies, then duplicates
 ```
 
@@ -230,13 +230,13 @@ eta       +=  +1.35 x frailty
 ```
 
 Drawn immediately before `SelfRatedHealth`. This is the only thing that makes `SelfRatedHealth`
-informative about `HighHealthBurden` beyond the measured features, and therefore the only thing
+informative about `HighHealthNeeds` beyond the measured features, and therefore the only thing
 that makes it a real leakage trap rather than a redundant column. Without it the measured leakage
 benefit is approximately zero.
 
 ---
 
-## Level 7 (v3): HighHealthBurden
+## Level 7 (v3): HighHealthNeeds
 
 ```
 eta = linear + non_linear + interactions + 1.35 x frailty + Normal(0, 0.45)
@@ -267,10 +267,10 @@ groups: any-smoker x BMI≥27, stressed x poor-or-fair sleep, over-55 x sedentar
 active. Narrow interactions firing on 2% of rows are invisible in aggregate performance and cannot
 reward a more expressive model.
 
-**Calibration.** `HHB_INTERCEPT` is set so the positive rate lands at ~20%. Any change to the
-coefficients or to `HHB_FRAILTY`/`HHB_NOISE_SD` changes the variance of `eta` and therefore the
+**Calibration.** `HHN_INTERCEPT` is set so the positive rate lands at ~20%. Any change to the
+coefficients or to `HHN_FRAILTY`/`HHN_NOISE_SD` changes the variance of `eta` and therefore the
 positive rate, so the intercept must be re-solved — bisect on the mean of `sigmoid(eta)` using the
-*combined* unobserved standard deviation `hypot(HHB_FRAILTY, HHB_NOISE_SD)`, not the idiosyncratic
+*combined* unobserved standard deviation `hypot(HHN_FRAILTY, HHN_NOISE_SD)`, not the idiosyncratic
 noise alone.
 
 ---
@@ -296,7 +296,7 @@ dev,  thresholds = generate(DEV_CONFIG,  rows,      seed)
 test, _          = generate(TEST_CONFIG, test_rows, seed + 2, thresholds=thresholds)
 ```
 
-`HighHealthBurden` needs no such treatment — it is a Bernoulli draw from a sigmoid, so the shifted
+`HighHealthNeeds` needs no such treatment — it is a Bernoulli draw from a sigmoid, so the shifted
 covariates move the positive rate on their own. That is why the label shift is *automatically*
 compositional rather than imposed, which is precisely the property the drift exercise turns on.
 
@@ -314,7 +314,7 @@ Injection is three independent steps so cohorts can take different subsets:
 3. **Duplicates** — both cohorts, development 0.4% uniform, test 2.0% sampled with UK rows weighted
    x4.
 
-`HighHealthBurden` joins `ID`, `Country` and `SelfRatedHealth` in the immune set, so no target is
+`HighHealthNeeds` joins `ID`, `Country` and `SelfRatedHealth` in the immune set, so no target is
 ever nulled.
 
 ---

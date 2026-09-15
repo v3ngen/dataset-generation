@@ -113,7 +113,7 @@ GENDER_SRH_ADJ = {'Male': 0.0, 'Female': -3.0, 'Other': 0.0}
 
 # Latent frailty: an unobserved, standard-normal "how robust is this person really"
 # factor that is never written to the CSV. It lowers SelfRatedHealth and raises the
-# risk of a high-burden year, so SelfRatedHealth carries information about future
+# risk of a high-needs year, so SelfRatedHealth carries information about future
 # outcomes OVER AND ABOVE every measured risk factor.
 #
 # This is real epidemiology -- self-rated health is famously predictive of mortality
@@ -123,10 +123,10 @@ GENDER_SRH_ADJ = {'Male': 0.0, 'Female': -3.0, 'Other': 0.0}
 # shared latent term it would add nothing a model cannot already get from the
 # features it was built from.
 SRH_FRAILTY = -18.0
-HHB_FRAILTY = 1.35
+HHN_FRAILTY = 1.35
 
 # --------------------------------------------------------------------------------------
-# HighHealthBurden: the binary ML target. Coefficients are log-odds contributions.
+# HighHealthNeeds: the binary ML target. Coefficients are log-odds contributions.
 #
 # The linear block is what a logistic regression can capture. The non-linear and
 # interaction blocks below it are what make a tree ensemble or an MLP worth
@@ -134,21 +134,21 @@ HHB_FRAILTY = 1.35
 # more expressive model" would be a pointless exercise.
 # --------------------------------------------------------------------------------------
 
-HHB_INTERCEPT = -6.565           # calibrated so the positive rate lands near 20%
+HHN_INTERCEPT = -6.565           # calibrated so the positive rate lands near 20%
 
-HHB_SMOKING = {'Never': 0.0, 'Former': 0.15, 'Vaper': 0.60, 'Light Smoker': 0.45, 'Heavy Smoker': 0.85}
-HHB_ACTIVITY = {'Sedentary': 0.40, 'Lightly Active': 0.12, 'Moderately Active': -0.18, 'Very Active': -0.40}
-HHB_STRESS = {'Low': 0.0, 'Medium': 0.30, 'High': 0.65}
-HHB_SLEEP_Q = {'Poor': 0.55, 'Fair': 0.20, 'Good': -0.15, 'Excellent': -0.45}
-HHB_HEALTH = {'No Issues': 0.0, 'Mild': 0.45, 'Moderate': 0.90, 'Severe': 1.45}
-HHB_ALCOHOL = {'Non-Drinker': 0.05, 'Light': 0.0, 'Moderate': 0.12, 'Heavy': 0.55}
-HHB_COUNTRY = {'Norway': -0.40, 'Italy': -0.18, 'France': 0.12, 'UK': 0.58}
-HHB_GENDER = {'Male': 0.0, 'Female': 0.10, 'Other': 0.05}
+HHN_SMOKING = {'Never': 0.0, 'Former': 0.15, 'Vaper': 0.60, 'Light Smoker': 0.45, 'Heavy Smoker': 0.85}
+HHN_ACTIVITY = {'Sedentary': 0.40, 'Lightly Active': 0.12, 'Moderately Active': -0.18, 'Very Active': -0.40}
+HHN_STRESS = {'Low': 0.0, 'Medium': 0.30, 'High': 0.65}
+HHN_SLEEP_Q = {'Poor': 0.55, 'Fair': 0.20, 'Good': -0.15, 'Excellent': -0.45}
+HHN_HEALTH = {'No Issues': 0.0, 'Mild': 0.45, 'Moderate': 0.90, 'Severe': 1.45}
+HHN_ALCOHOL = {'Non-Drinker': 0.05, 'Light': 0.0, 'Moderate': 0.12, 'Heavy': 0.55}
+HHN_COUNTRY = {'Norway': -0.40, 'Italy': -0.18, 'France': 0.12, 'UK': 0.58}
+HHN_GENDER = {'Male': 0.0, 'Female': 0.10, 'Other': 0.05}
 
-HHB_AGE = 0.030                 # per year above 30
-HHB_BMI = 0.055                 # per BMI unit outside the 19-25 band
-HHB_HR = 0.006                  # per bpm above 70
-HHB_INCOME = -4.5e-6            # per EUR above the 45k reference
+HHN_AGE = 0.030                 # per year above 30
+HHN_BMI = 0.055                 # per BMI unit outside the 19-25 band
+HHN_HR = 0.006                  # per bpm above 70
+HHN_INCOME = -4.5e-6            # per EUR above the 45k reference
 
 # Non-monotonic terms. These apply to EVERY row rather than a rare subgroup, which
 # is what makes them big enough to survive the noise and show up as a real gap
@@ -157,16 +157,16 @@ HHB_INCOME = -4.5e-6            # per EUR above the 45k reference
 # point: a quadratic centred outside the data's range is very nearly linear across
 # the support, and a linear model then captures it for free. Mean sleep is ~6.4h
 # and mean intake ~2.8 cups, so both arms of each curve carry real mass.
-HHB_SLEEP_U = 0.72              # per (hour - 6.4)^2   -- short AND long sleep are harmful
-HHB_SLEEP_CENTRE = 6.4
-HHB_COFFEE_U = 0.34             # per (cup - 2.8)^2    -- the J-curve: abstainers and heavy
-HHB_COFFEE_CENTRE = 2.8         #   drinkers both fare worse than moderate drinkers
+HHN_SLEEP_U = 0.72              # per (hour - 6.4)^2   -- short AND long sleep are harmful
+HHN_SLEEP_CENTRE = 6.4
+HHN_COFFEE_U = 0.34             # per (cup - 2.8)^2    -- the J-curve: abstainers and heavy
+HHN_COFFEE_CENTRE = 2.8         #   drinkers both fare worse than moderate drinkers
 
 # Continuous interactions. Also always-on, and invisible to an additive model.
-HHB_BMI_X_AGE = 0.0042          # per (BMI unit outside band) x (year above 30)
-HHB_CAFFEINE_X_SLEEP = 0.00125  # per mg x (hour of sleep below 7)
+HHN_BMI_X_AGE = 0.0042          # per (BMI unit outside band) x (year above 30)
+HHN_CAFFEINE_X_SLEEP = 0.00125  # per mg x (hour of sleep below 7)
 
-HHB_NOISE_SD = 0.45             # unobserved heterogeneity
+HHN_NOISE_SD = 0.45             # unobserved heterogeneity
 
 # Categorical interactions. Deliberately defined over broad groups rather than
 # narrow ones: an interaction that only fires on 2% of rows contributes almost
@@ -174,9 +174,9 @@ HHB_NOISE_SD = 0.45             # unobserved heterogeneity
 # Coffee's protective arm only holds for people who sleep well -- for poor sleepers
 # it is roughly cancelled out. Thematically the centrepiece of a coffee dataset, and
 # strongly non-additive.
-HHB_COFFEE_X_SLEEPQ = 0.48      # per protective cup, for Poor/Fair sleepers
+HHN_COFFEE_X_SLEEPQ = 0.48      # per protective cup, for Poor/Fair sleepers
 
-HHB_INTERACTIONS = {
+HHN_INTERACTIONS = {
     'smoker_x_overweight': 1.15,
     'stressed_x_poor_sleep': 1.00,
     'older_x_sedentary': 1.25,
@@ -428,7 +428,7 @@ def generate(config: CohortConfig, n_rows: int, seed: int, thresholds: dict | No
     df['Health Issues'] = bucket(health_score, thresholds['health_issues'], HEALTH_ISSUES_ORDER)
 
     # Latent frailty -- never written to the CSV. Shared by both targets, which is
-    # what makes SelfRatedHealth genuinely informative about HighHealthBurden beyond
+    # what makes SelfRatedHealth genuinely informative about HighHealthNeeds beyond
     # the measured features.
     frailty = rng.normal(0, 1, size=n)
 
@@ -458,14 +458,14 @@ def generate(config: CohortConfig, n_rows: int, seed: int, thresholds: dict | No
         thresholds['srh'] = np.quantile(srh_score, [0.08, 0.25, 0.65, 0.90])
     df['SelfRatedHealth'] = bucket(srh_score, thresholds['srh'], SRH_ORDER)
 
-    # Level 7: HighHealthBurden -- the binary ML target
-    df['HighHealthBurden'] = draw_high_health_burden(df, rng, frailty)
+    # Level 7: HighHealthNeeds -- the binary ML target
+    df['HighHealthNeeds'] = draw_high_health_needs(df, rng, frailty)
 
     return df, thresholds
 
 
-def high_health_burden_logit(df: pd.DataFrame, frailty: np.ndarray | None = None) -> np.ndarray:
-    """The noise-free log-odds of a high-burden health year.
+def high_health_needs_logit(df: pd.DataFrame, frailty: np.ndarray | None = None) -> np.ndarray:
+    """The noise-free log-odds of a year of high health needs.
 
     Split into three blocks so the spec, the validation script and the reference
     notebook can all talk about them separately.
@@ -480,27 +480,27 @@ def high_health_burden_logit(df: pd.DataFrame, frailty: np.ndarray | None = None
         frailty = np.zeros(len(df))
 
     linear = (
-        HHB_INTERCEPT
-        + df['Smoking Status'].map(HHB_SMOKING).to_numpy()
-        + df['Physical Activity Level'].map(HHB_ACTIVITY).to_numpy()
-        + df['Stress Level'].map(HHB_STRESS).to_numpy()
-        + df['Sleep Quality'].map(HHB_SLEEP_Q).to_numpy()
-        + df['Health Issues'].map(HHB_HEALTH).to_numpy()
-        + df['Alcohol Level'].map(HHB_ALCOHOL).to_numpy()
-        + df['Country'].map(HHB_COUNTRY).to_numpy()
-        + df['Gender'].map(HHB_GENDER).to_numpy()
-        + HHB_AGE * np.maximum(0, age - 30)
-        + HHB_BMI * np.maximum(0, np.abs(bmi - 22) - 3)
-        + HHB_HR * (df['Avg Resting Heart Rate'].to_numpy() - 70)
-        + HHB_INCOME * (income - 45000)
-        + HHB_FRAILTY * frailty
+        HHN_INTERCEPT
+        + df['Smoking Status'].map(HHN_SMOKING).to_numpy()
+        + df['Physical Activity Level'].map(HHN_ACTIVITY).to_numpy()
+        + df['Stress Level'].map(HHN_STRESS).to_numpy()
+        + df['Sleep Quality'].map(HHN_SLEEP_Q).to_numpy()
+        + df['Health Issues'].map(HHN_HEALTH).to_numpy()
+        + df['Alcohol Level'].map(HHN_ALCOHOL).to_numpy()
+        + df['Country'].map(HHN_COUNTRY).to_numpy()
+        + df['Gender'].map(HHN_GENDER).to_numpy()
+        + HHN_AGE * np.maximum(0, age - 30)
+        + HHN_BMI * np.maximum(0, np.abs(bmi - 22) - 3)
+        + HHN_HR * (df['Avg Resting Heart Rate'].to_numpy() - 70)
+        + HHN_INCOME * (income - 45000)
+        + HHN_FRAILTY * frailty
     )
 
     # Non-monotonic terms: a linear model on the raw features cannot represent these.
     bmi_dev = np.maximum(0, np.abs(bmi - 22) - 3)
     non_linear = (
-        HHB_SLEEP_U * (hours - HHB_SLEEP_CENTRE) ** 2
-        + HHB_COFFEE_U * (cups - HHB_COFFEE_CENTRE) ** 2
+        HHN_SLEEP_U * (hours - HHN_SLEEP_CENTRE) ** 2
+        + HHN_COFFEE_U * (cups - HHN_COFFEE_CENTRE) ** 2
     )
 
     # Interactions: super-additive combinations of risk factors. The two continuous
@@ -513,25 +513,25 @@ def high_health_burden_logit(df: pd.DataFrame, frailty: np.ndarray | None = None
     activity = df['Physical Activity Level'].to_numpy()
 
     interactions = (
-        HHB_BMI_X_AGE * bmi_dev * np.maximum(0, age - 30)
-        + HHB_CAFFEINE_X_SLEEP * caffeine * np.maximum(0, 7 - hours)
-        + HHB_INTERACTIONS['smoker_x_overweight'] * (smoker & (bmi >= 27))
-        + HHB_INTERACTIONS['stressed_x_poor_sleep'] * (stressed & sleeps_badly)
-        + HHB_INTERACTIONS['older_x_sedentary'] * (older & (activity == 'Sedentary'))
-        + HHB_INTERACTIONS['older_x_very_active'] * (older & (activity == 'Very Active'))
-        + HHB_COFFEE_X_SLEEPQ * np.minimum(cups, 3) * sleeps_badly
+        HHN_BMI_X_AGE * bmi_dev * np.maximum(0, age - 30)
+        + HHN_CAFFEINE_X_SLEEP * caffeine * np.maximum(0, 7 - hours)
+        + HHN_INTERACTIONS['smoker_x_overweight'] * (smoker & (bmi >= 27))
+        + HHN_INTERACTIONS['stressed_x_poor_sleep'] * (stressed & sleeps_badly)
+        + HHN_INTERACTIONS['older_x_sedentary'] * (older & (activity == 'Sedentary'))
+        + HHN_INTERACTIONS['older_x_very_active'] * (older & (activity == 'Very Active'))
+        + HHN_COFFEE_X_SLEEPQ * np.minimum(cups, 3) * sleeps_badly
     )
 
     return linear + non_linear + interactions
 
 
-def draw_high_health_burden(df: pd.DataFrame, rng: np.random.Generator,
+def draw_high_health_needs(df: pd.DataFrame, rng: np.random.Generator,
                             frailty: np.ndarray) -> np.ndarray:
     """Bernoulli draw, not a threshold -- so there is irreducible noise and a
     realistic performance ceiling rather than a boundary a flexible model could
     learn perfectly."""
     n = len(df)
-    eta = high_health_burden_logit(df, frailty) + rng.normal(0, HHB_NOISE_SD, size=n)
+    eta = high_health_needs_logit(df, frailty) + rng.normal(0, HHN_NOISE_SD, size=n)
     p = 1 / (1 + np.exp(-eta))
     return (rng.random(n) < p).astype(int)
 
@@ -540,7 +540,7 @@ def draw_high_health_burden(df: pd.DataFrame, rng: np.random.Generator,
 # Data quality issues, split so each can be applied independently
 # --------------------------------------------------------------------------------------
 
-IMMUNE_COLUMNS = {'ID', 'Country', 'SelfRatedHealth', 'HighHealthBurden'}
+IMMUNE_COLUMNS = {'ID', 'Country', 'SelfRatedHealth', 'HighHealthNeeds'}
 
 
 def age_missingness_multiplier(age: np.ndarray) -> np.ndarray:
@@ -667,10 +667,10 @@ def main():
     test.to_csv(args.test_output, index=False)
 
     print(f'Development set: {len(dev):>6} rows -> {args.dev_output}')
-    print(f'  positive rate: {dev["HighHealthBurden"].mean():.1%}   '
+    print(f'  positive rate: {dev["HighHealthNeeds"].mean():.1%}   '
           f'missing cells: {int(dev.isna().sum().sum())}')
     print(f'Test set:        {len(test):>6} rows -> {args.test_output}')
-    print(f'  positive rate: {test["HighHealthBurden"].mean():.1%}   '
+    print(f'  positive rate: {test["HighHealthNeeds"].mean():.1%}   '
           f'missing cells: {int(test.isna().sum().sum())}')
 
 

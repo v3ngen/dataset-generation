@@ -52,9 +52,9 @@ automated check (§7) rather than assumed.
 
 ---
 
-## 2. The binary target: `HighHealthBurden`
+## 2. The binary target: `HighHealthNeeds`
 
-**Definition.** Did the person have a high-burden health year in the twelve months following the
+**Definition.** Did the person have a year of high health needs in the twelve months following the
 survey — **≥14 days of health-related absence from work or normal activity, OR ≥6 primary-care
 contacts**?
 

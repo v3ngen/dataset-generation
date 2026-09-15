@@ -35,7 +35,7 @@ from sklearn.preprocessing import StandardScaler
 from costs import COST_EMPLOYER, COST_PUBLIC_HEALTH, cost_per_person, optimal_threshold
 
 SEED = 42
-TARGET = 'HighHealthBurden'
+TARGET = 'HighHealthNeeds'
 LEAK_COLUMN = 'SelfRatedHealth'
 
 ORDINAL_SCALES = {

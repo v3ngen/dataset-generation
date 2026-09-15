@@ -42,7 +42,7 @@ development set's quantile thresholds.
 | Target | Type | Used for |
 |---|---|---|
 | `SelfRatedHealth` | 5-class ordinal | **CW1's** EDA target. In **CW2** it is the leakage trap (it must be excluded from the feature set) and then the error-analysis segmentation variable. |
-| `HighHealthBurden` | binary, ~20% positive | **CW2's** ML target: ≥14 days health-related absence or ≥6 primary-care contacts in the following 12 months. |
+| `HighHealthNeeds` | binary, ~20% positive | **CW2's** ML target: ≥14 days health-related absence or ≥6 primary-care contacts in the following 12 months. |
 
 ## The two stakeholders
 

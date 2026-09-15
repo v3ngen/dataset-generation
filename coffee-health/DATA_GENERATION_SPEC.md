@@ -32,9 +32,9 @@ unchanged except where noted.
 Income also nudges three existing features: a higher-income person is more likely to be one step
 more active, one step further along the quit scale, and has a modestly lower BMI.
 
-### New target — `HighHealthBurden`
+### New target — `HighHealthNeeds`
 
-Binary. **Did this person have a high-burden health year in the twelve months after the survey** —
+Binary. **Did this person have a year of high health needs in the twelve months after the survey** —
 ≥14 days of health-related absence from work or normal activity, **or** ≥6 primary-care contacts?
 
 Drawn as `y ~ Bernoulli(sigmoid(eta))` — a **stochastic draw, not a threshold**, so there is
@@ -86,7 +86,7 @@ incorporate information no questionnaire captures.
 
 Measured effect of including it: **+0.030 AUC, +2.7pp accuracy** — seductive, detectable, and
 not so total that the exercise becomes trivial. Within each self-rated-health level the
-high-burden rate runs 65.7% (Poor) down to 1.6% (Excellent): strongly informative, nowhere near
+high-needs rate runs 65.7% (Poor) down to 1.6% (Excellent): strongly informative, nowhere near
 deterministic.
 
 ### Two cohorts
@@ -246,7 +246,7 @@ Occupation has been dropped (see decision log) — Age, Gender, Country are the 
 ### Target
 16. **SelfRatedHealth** — {Poor, Fair, Good, Very Good, Excellent} — see Target Variable section above.
     *In v3 this is the CW1 EDA target and CW2's leakage trap; it must be excluded from the ML feature set.*
-17. **HighHealthBurden** *(v3)* — binary, the CW2 ML target — see the Version 3 section.
+17. **HighHealthNeeds** *(v3)* — binary, the CW2 ML target — see the Version 3 section.
 
 ---
 

@@ -15,11 +15,11 @@ A pan-European research consortium ran a lifestyle-and-health survey across Ital
 United Kingdom and Norway, recording each respondent's demographics, coffee and caffeine
 consumption, sleep, stress, physical activity, smoking and drinking behaviour, and a set of
 routine physical measurements. Each respondent was then followed for the next twelve months, and
-the consortium recorded whether they went on to have a **high-burden health year**: fourteen or
+the consortium recorded whether they went on to have a **year of high health needs**: fourteen or
 more days of health-related absence from work or normal activity, or six or more primary-care
 contacts.
 
-That follow-up flag, `HighHealthBurden`, is what you are asked to predict.
+That follow-up flag, `HighHealthNeeds`, is what you are asked to predict.
 
 Two organisations want to use your model. Both run the same intervention — a twelve-week
 preventive lifestyle programme, offered by invitation — and both will run your model over the
@@ -31,7 +31,7 @@ agree about which of your models is best.
 The agency runs the programme as a free, publicly funded service: a health check followed by a
 twelve-week lifestyle course, offered by invitation. Its mandate is population health and its
 budget is judged against **downstream treatment costs**, so the thing that worries it is the
-person it fails to invite. Someone who goes on to have a high-burden year without ever being
+person it fails to invite. Someone who goes on to have a high-needs year without ever being
 offered support represents avoidable primary and secondary care spending and, in the agency's own
 framing, an equity failure — the people most likely to be missed are precisely the people least
 likely to present voluntarily. Programme places are inexpensive and the agency would far rather
@@ -43,7 +43,7 @@ blunt: **how many of the people who needed help did we miss, and what did that c
 
 The employer buys a small, fixed block of places on the same programme each year for its
 workforce, signed off by finance with no capacity to overspend. Every place given to someone who
-was not going to have a high-burden year is a place a colleague who needed it did not get, and
+was not going to have a high-needs year is a place a colleague who needed it did not get, and
 finance sees it as money spent for no measurable return. The employer does carry a real cost when
 it misses someone — absence cover, lost productivity, temporary staffing — but that cost is a
 fraction of what the health agency absorbs, and it is spread across the business rather than
@@ -62,15 +62,15 @@ intervention pays for itself and more.
 
 |  | Predicted: no invitation | Predicted: invite |
 |---|---|---|
-| **Actually not high-burden** | EUR 0 | **EUR 180** — wasted health check and programme place |
-| **Actually high-burden** | **EUR 1,450** — avoidable downstream primary and secondary care | **EUR -720** — programme cost of 180 offset by an expected 900 in avoided care |
+| **Actually not high-needs** | EUR 0 | **EUR 180** — wasted health check and programme place |
+| **Actually high-needs** | **EUR 1,450** — avoidable downstream primary and secondary care | **EUR -720** — programme cost of 180 offset by an expected 900 in avoided care |
 
 ### Stakeholder B — employer occupational health
 
 |  | Predicted: no invitation | Predicted: invite |
 |---|---|---|
-| **Actually not high-burden** | EUR 0 | **EUR 520** — a scarce programme place consumed for no return |
-| **Actually high-burden** | **EUR 780** — absence cover, temporary staffing, lost productivity | **EUR -80** — programme cost of 520 offset by an expected 600 in avoided absence |
+| **Actually not high-needs** | EUR 0 | **EUR 520** — a scarce programme place consumed for no return |
+| **Actually high-needs** | **EUR 780** — absence cover, temporary staffing, lost productivity | **EUR -80** — programme cost of 520 offset by an expected 600 in avoided absence |
 
 Note the asymmetry. For the agency a false negative costs about **eight times** a false positive.
 For the employer the ratio is closer to **1.5 to 1**, and in the opposite direction from what the
@@ -123,7 +123,7 @@ optimising accuracy.
    and quantifying it is worth more marks than squeezing out another point of accuracy.
 4. Make a recommendation to each stakeholder, and justify it in their terms — not in yours.
 
-A high-accuracy model that misses most of the high-burden cases is a bad model for the agency and
+A high-accuracy model that misses most of the high-needs cases is a bad model for the agency and
 you should be able to prove it with numbers rather than assert it.
 
 ---

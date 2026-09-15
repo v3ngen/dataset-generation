@@ -37,7 +37,7 @@ Each tier assumes the ones below it.
 
 | Strand | Finding |
 |---|---|
-| A | 10,040 rows, 18 columns. Data types. `describe()` for numerics, value counts for categoricals. Identifies `SelfRatedHealth` and `HighHealthBurden` as the two targets |
+| A | 10,040 rows, 18 columns. Data types. `describe()` for numerics, value counts for categoricals. Identifies `SelfRatedHealth` and `HighHealthNeeds` as the two targets |
 | B | Counts the 40 duplicate rows. Tabulates missing values per column (Health Issues 10.4%, Sleep Hours 7.5%, Resting HR 6.0%, Stress 5.3%). Notices that some `Age` and `BMI` values are impossible |
 | C | Univariate distributions. A correlation matrix. Names the strongest correlates of self-rated health (Health Issues −0.47, Sleep Quality +0.38, Activity +0.33, Stress −0.31). One demographic breakdown |
 
@@ -45,7 +45,7 @@ Each tier assumes the ones below it.
 
 | Strand | Finding |
 |---|---|
-| A | Distinguishes nominal, ordinal and continuous, and **respects the natural order** of the ordered categoricals in every table and chart. Notes `ID` is an identifier, not a feature. Notes the class imbalance in `HighHealthBurden` (19.8% positive) |
+| A | Distinguishes nominal, ordinal and continuous, and **respects the natural order** of the ordered categoricals in every table and chart. Notes `ID` is an identifier, not a feature. Notes the class imbalance in `HighHealthNeeds` (19.8% positive) |
 | B | Removes the duplicates and justifies it. Recognises the anomalies are **exactly recoverable** — `344 → 34` by dropping the trailing digit, `245 → 24.5` by dividing by ten — and repairs rather than discards. Quantifies what `dropna()` would cost: **26% of all rows** |
 | C | Bivariate analysis against both targets. Country comparison with real profile differences (Norway 83.2% "good or better" down to UK 69.6%; UK has the highest BMI at 27.9 and the lowest coffee intake at 1.8 cups). Smoking dose-response. Activity and sleep-quality gradients |
 
@@ -55,13 +55,13 @@ Each tier assumes the ones below it.
 |---|---|
 | A | Describes **measurement provenance** — which fields come from a wearable, which from a survey — and draws the implication for how far each can be trusted. Articulates what one row represents and what the targets actually measure |
 | B | Discovers that **missingness is not random**: it rises with age across the device-sourced fields (roughly 3.6% to 16.2% from the youngest band to the oldest). Names the MCAR/MAR distinction and uses it correctly |
-| C | **Bins or stratifies continuous features against the target**, and thereby finds the two curves that correlation cannot see: the **coffee J-curve** (~30% high-burden among near-abstainers, ~17% at 2–3 cups, ~24% above 4) and the **sleep U-curve** (75% below 4.5 hours, 9% at 6.5–7.5, 43% above 8.5). States explicitly that coffee's near-zero linear correlation is *not* evidence of no relationship. Clustering with interpreted segments |
+| C | **Bins or stratifies continuous features against the target**, and thereby finds the two curves that correlation cannot see: the **coffee J-curve** (~30% high-needs among near-abstainers, ~17% at 2–3 cups, ~24% above 4) and the **sleep U-curve** (75% below 4.5 hours, 9% at 6.5–7.5, 43% above 8.5). States explicitly that coffee's near-zero linear correlation is *not* evidence of no relationship. Clustering with interpreted segments |
 
 ### Tier 4 — Excellent (70+)
 
 | Strand | Finding |
 |---|---|
-| A | Frames the dataset in terms of the decision it supports. Handles **both** targets without conflating them — notes they are related (high-burden rate falls 65.7% → 40.0% → 16.0% → 5.1% → 1.6% across the self-rated health levels) but that neither is a relabelling of the other |
+| A | Frames the dataset in terms of the decision it supports. Handles **both** targets without conflating them — notes they are related (high-needs rate falls 65.7% → 40.0% → 16.0% → 5.1% → 1.6% across the self-rated health levels) but that neither is a relabelling of the other |
 | B | Runs the **negative control**: missingness is flat by gender and country, and flat by age for `Health Issues`, so the age effect is specific to device-sourced fields and has a mechanism rather than being a coincidence. Quantifies the resulting bias — rows dropped by `dropna()` have mean age **42.9** against **39.9** for rows kept — and reasons about who a downstream model would then underserve |
 | C | At least two of: <br>• the **confound** — `Household Income` ↔ `Caffeine Intake` is +0.24 overall but ≈0 *within every country*, because Norway has both the highest incomes and the strongest coffee <br>• **mediation** — income correlates only +0.05 with health directly, but the sedentary share falls 28.1% → 17.8% across income quintiles, so the gradient runs through behaviour rather than being absent <br>• **interaction** — smoking and overweight compound: 45.3% observed against 30.0% if the two effects were additive; and activity × age crosses over, with a very active over-55 at lower risk than a very active under-55 <br>• **ecological inference** — the UK has high BMI and low coffee consumption, and saying so does not license "coffee protects against obesity" |
 
@@ -79,7 +79,7 @@ Not more findings — better handling of the ones they have.
   quietly drop the analyses that found nothing.
 - **Findings connected to the problem.** The gender result is a good test: women report worse health
   than men (mean 2.09 vs 2.18) with near-identical rates of diagnosed issues (43.3% vs 43.0%) *and*
-  a genuinely higher high-burden rate (20.5% vs 18.9%). A strong answer notices that the reporting
+  a genuinely higher high-needs rate (20.5% vs 18.9%). A strong answer notices that the reporting
   gap and the outcome gap point the same way but are not the same size, and is careful about which
   one self-rated health is measuring.
 
