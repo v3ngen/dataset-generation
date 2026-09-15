@@ -1,0 +1,149 @@
+# Stakeholders and Cost Matrices
+
+**Audience: students.** The prose in §1-§3 is written to be lifted into the assignment brief.
+§4-§6 are the mechanics: the matrices, how to use them, and what is expected. §7 is a note for
+the unit leader on how the numbers were chosen.
+
+Both cost matrices are provided in code in `costs.py` and are already imported and used in the
+starter notebook, alongside accuracy. You do not need to type them in.
+
+---
+
+## 1. The scenario
+
+A pan-European research consortium ran a lifestyle-and-health survey across Italy, France, the
+United Kingdom and Norway, recording each respondent's demographics, coffee and caffeine
+consumption, sleep, stress, physical activity, smoking and drinking behaviour, and a set of
+routine physical measurements. Each respondent was then followed for the next twelve months, and
+the consortium recorded whether they went on to have a **high-burden health year**: fourteen or
+more days of health-related absence from work or normal activity, or six or more primary-care
+contacts.
+
+That follow-up flag, `HighHealthBurden`, is what you are asked to predict.
+
+Two organisations want to use your model. Both run the same intervention — a twelve-week
+preventive lifestyle programme, offered by invitation — and both will run your model over the
+same people to decide who to invite. They are not, however, the same customer, and they will not
+agree about which of your models is best.
+
+## 2. Stakeholder A — a national public health agency
+
+The agency runs the programme as a free, publicly funded service: a health check followed by a
+twelve-week lifestyle course, offered by invitation. Its mandate is population health and its
+budget is judged against **downstream treatment costs**, so the thing that worries it is the
+person it fails to invite. Someone who goes on to have a high-burden year without ever being
+offered support represents avoidable primary and secondary care spending and, in the agency's own
+framing, an equity failure — the people most likely to be missed are precisely the people least
+likely to present voluntarily. Programme places are inexpensive and the agency would far rather
+over-invite than under-invite: an unnecessary invitation costs it a health check and a course
+place, and the person invited comes to no harm. Its question about any model you hand it is
+blunt: **how many of the people who needed help did we miss, and what did that cost us?**
+
+## 3. Stakeholder B — an employer's occupational health team
+
+The employer buys a small, fixed block of places on the same programme each year for its
+workforce, signed off by finance with no capacity to overspend. Every place given to someone who
+was not going to have a high-burden year is a place a colleague who needed it did not get, and
+finance sees it as money spent for no measurable return. The employer does carry a real cost when
+it misses someone — absence cover, lost productivity, temporary staffing — but that cost is a
+fraction of what the health agency absorbs, and it is spread across the business rather than
+landing on the occupational health budget. Its question is close to the opposite of the agency's:
+**of the people you told us to invite, how many actually needed it, and can we defend the
+spend?**
+
+---
+
+## 4. The cost matrices
+
+Costs are per person scored, in euros. Negative numbers are **net benefits** — cases where the
+intervention pays for itself and more.
+
+### Stakeholder A — national public health agency
+
+|  | Predicted: no invitation | Predicted: invite |
+|---|---|---|
+| **Actually not high-burden** | EUR 0 | **EUR 180** — wasted health check and programme place |
+| **Actually high-burden** | **EUR 1,450** — avoidable downstream primary and secondary care | **EUR -720** — programme cost of 180 offset by an expected 900 in avoided care |
+
+### Stakeholder B — employer occupational health
+
+|  | Predicted: no invitation | Predicted: invite |
+|---|---|---|
+| **Actually not high-burden** | EUR 0 | **EUR 520** — a scarce programme place consumed for no return |
+| **Actually high-burden** | **EUR 780** — absence cover, temporary staffing, lost productivity | **EUR -80** — programme cost of 520 offset by an expected 600 in avoided absence |
+
+Note the asymmetry. For the agency a false negative costs about **eight times** a false positive.
+For the employer the ratio is closer to **1.5 to 1**, and in the opposite direction from what the
+agency would do about it.
+
+---
+
+## 5. Using them
+
+Total cost for a set of predictions is just the confusion matrix weighted by the cost matrix:
+
+```
+total_cost = TN*C_TN + FP*C_FP + FN*C_FN + TP*C_TP
+```
+
+`costs.py` gives you `total_cost(y_true, y_pred, matrix)` and `cost_per_person(...)`, along with
+`COST_PUBLIC_HEALTH` and `COST_EMPLOYER`. Report cost per person as well as total cost — it is
+easier to interpret and it makes results comparable between the development set and the smaller
+test set.
+
+### The threshold is a decision, not a default
+
+Most classifiers give you a probability and then apply a threshold of 0.5 to turn it into a
+prediction. There is nothing special about 0.5. The threshold that minimises expected cost is:
+
+```
+p* = (C_FP - C_TN) / ((C_FP - C_TN) + (C_FN - C_TP))
+```
+
+For these two stakeholders that gives:
+
+| Stakeholder | Cost-optimal threshold | Behaviour |
+|---|---|---|
+| A — public health agency | **~0.077** | Invite aggressively; tolerate many false positives to avoid misses |
+| B — employer | **~0.377** | Invite only where reasonably confident; protect the scarce places |
+
+**The default 0.5 is wrong for both of them.** Neither stakeholder's interests are served by
+optimising accuracy.
+
+---
+
+## 6. What you are expected to do with this
+
+1. Report **both** stakeholders' total and per-person cost for every model you evaluate, not just
+   accuracy.
+2. Treat the decision threshold as something you tune per stakeholder, and show the effect.
+3. Expect the two stakeholders to **disagree about which model is best**, and when they do, say
+   so explicitly and explain *why* in terms of the trade-off between precision and recall. A
+   model that is better for one may be a poor choice for the other. Identifying that disagreement
+   and quantifying it is worth more marks than squeezing out another point of accuracy.
+4. Make a recommendation to each stakeholder, and justify it in their terms — not in yours.
+
+A high-accuracy model that misses most of the high-burden cases is a bad model for the agency and
+you should be able to prove it with numbers rather than assert it.
+
+---
+
+## 7. Note for the unit leader
+
+The figures are plausible rather than sourced, and are chosen to produce specific pedagogical
+behaviour:
+
+- The two cost-optimal thresholds (0.077 and 0.377) sit either side of 0.5 in usefulness terms and
+  are far apart, so threshold tuning is worth a great deal and a single operating point cannot
+  serve both stakeholders.
+- The ratios are asymmetric in *opposite directions*, which is what makes a genuine rank reversal
+  between a recall-oriented and a precision-oriented model possible.
+- Both matrices give a net benefit for true positives, so students see that a correct positive
+  prediction creates value rather than merely avoiding loss — which is what makes the agency's
+  very low optimal threshold intuitive rather than arbitrary.
+
+`validate_ml_ladder.py` asserts that a rank reversal actually occurs between two plausible
+student models under these numbers. If the figures are changed, re-run it.
+
+Currency is euros throughout for simplicity, even though the four countries in the dataset do not
+share one. If that is distracting, it can be relabelled as "cost units" without changing anything.
