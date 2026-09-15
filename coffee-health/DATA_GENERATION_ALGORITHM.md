@@ -10,14 +10,23 @@ Implements `DATA_GENERATION_SPEC.md`. This doc resolves the spec's remaining ope
 
 ```
 Level 0 (Independent):        ID, Country, Age, Gender
+Level 0.5 (v3):                Household Income          <- nudges Levels 1-3
 Level 1 (Country-driven lifestyle): Smoking Status, Alcohol Level, Daily Coffees, Caffeine Intake
 Level 2 (Behavioral):          Stress Level, Physical Activity Level
 Level 3 (Physiology):          BMI, Avg Resting Heart Rate
 Level 4 (Sleep):               Avg Sleep Hours Per Night, Sleep Quality
 Level 5 (Chronic health):      Health Issues
 Level 6 (Target):              SelfRatedHealth
-Level 7 (Data quality issues): duplicates, Age/BMI anomalies, demographic-differential missing values
+Level 7 (v3 target):           HighHealthBurden
+Level 8 (Data quality issues): missing values, then Age/BMI anomalies, then duplicates
 ```
+
+A latent **frailty** variable is drawn just before Level 6 and feeds both targets. It is never
+written to the CSV — see "Latent frailty" below.
+
+Levels 6 and 7 are run for **two cohorts** (development and held-out test) that differ only in
+configuration. See "Two cohorts and distribution shift" at the end of this document, and note the
+threshold-reuse requirement there: it is the single easiest thing to get wrong.
 
 ---
 
@@ -182,6 +191,131 @@ The country-offset calibration itself was done by generating the dataset once, c
 - **Immune fields**: ID, Country, SelfRatedHealth (target).
 
 **Achieved** (seed 42, 10,000 base rows): duplicates 0.40% (40 rows, on target); Age anomalies 0.72%, BMI anomalies 0.56%; missingness by age band (Sleep / Heart Rate / Stress): 18-29 → 3.5% / 2.7% / 3.1%, 30-44 → 6.4% / 5.2% / 4.4%, 45-59 → 9.6% / 7.9% / 6.9%, 60+ → 15.2% / 12.7% / 10.2% — clearly monotonic with age, as intended; Health Issues missing 10.4%.
+
+---
+
+---
+
+## Level 0.5 (v3): Household Income
+
+```
+age_factor = 1 + 0.010 x (min(age, 52) - 30) - 0.012 x max(0, age - 60)
+income     = INCOME_MEDIAN[country] x age_factor x LogNormal(0, 0.42)
+income     = clip(round(income, -2), 12000, 250000)
+```
+
+`INCOME_MEDIAN` = Norway 62,000 / France 44,000 / UK 42,000 / Italy 36,000 EUR.
+
+A standardised `income_z = (log(income) - mean) / sd` then nudges three downstream features:
+
+- **Smoking Status** — with probability `clip(0.10 + 0.09 x income_z, 0, 0.40)`, shift one step
+  *down* the smoking scale (towards Never). Applied after the country draw.
+- **Physical Activity Level** — with probability `clip(0.12 + 0.10 x income_z, 0, 0.40)`, shift
+  one step *up*. Applied after the stress and age adjustments.
+- **BMI** — additive `-1.2e-5 x (income - 45000)`.
+
+Income's *direct* contribution to the binary target is deliberately small; most of its association
+with health is mediated by those three. That keeps the socioeconomic gradient visible in EDA while
+leaving income a poor basis for a nearest-neighbour distance — which is what makes feature scaling
+demonstrably necessary.
+
+---
+
+## Latent frailty (v3)
+
+```
+frailty ~ Normal(0, 1)          # per person, never written to the CSV
+srh_score += -18.0 x frailty
+eta       +=  +1.35 x frailty
+```
+
+Drawn immediately before `SelfRatedHealth`. This is the only thing that makes `SelfRatedHealth`
+informative about `HighHealthBurden` beyond the measured features, and therefore the only thing
+that makes it a real leakage trap rather than a redundant column. Without it the measured leakage
+benefit is approximately zero.
+
+---
+
+## Level 7 (v3): HighHealthBurden
+
+```
+eta = linear + non_linear + interactions + 1.35 x frailty + Normal(0, 0.45)
+p   = 1 / (1 + exp(-eta))
+y   = 1 if Uniform(0,1) < p else 0        # a DRAW, not a threshold
+```
+
+A Bernoulli draw rather than a cut on the score is what gives the problem irreducible noise and a
+realistic ceiling (Bayes AUC ~0.93 on these coefficients). The full coefficient tables are in
+`DATA_GENERATION_SPEC.md`; the three blocks are:
+
+**`linear`** — intercept plus additive terms in smoking, activity, stress, sleep quality, health
+issues, alcohol, country, gender, age, BMI deviation, resting heart rate and income.
+
+**`non_linear`** — `0.72 x (sleep_hours - 6.4)^2 + 0.34 x (cups - 2.8)^2`.
+
+> Both centres are the **middle of the observed distribution**, not a textbook ideal. Mean sleep is
+> 6.36 hours, so an earlier draft centred at 7.25 put 79% of the data on one arm; the term
+> correlated −0.76 with raw hours, a linear model captured it for free, and the measured gap
+> between logistic regression and a gradient-boosted tree came out **negative**. Re-centring on the
+> data moved that gap to +0.048 in one change. If these coefficients are ever retuned, check
+> `corr(term, raw_feature)` stays near zero.
+
+**`interactions`** — two continuous products (`bmi_deviation x years_over_30`,
+`caffeine x sleep_debt`), one that modulates the coffee curve
+(`min(cups,3) x sleeps_badly`), and four categorical terms defined over deliberately **broad**
+groups: any-smoker x BMI≥27, stressed x poor-or-fair sleep, over-55 x sedentary, over-55 x very
+active. Narrow interactions firing on 2% of rows are invisible in aggregate performance and cannot
+reward a more expressive model.
+
+**Calibration.** `HHB_INTERCEPT` is set so the positive rate lands at ~20%. Any change to the
+coefficients or to `HHB_FRAILTY`/`HHB_NOISE_SD` changes the variance of `eta` and therefore the
+positive rate, so the intercept must be re-solved — bisect on the mean of `sigmoid(eta)` using the
+*combined* unobserved standard deviation `hypot(HHB_FRAILTY, HHB_NOISE_SD)`, not the idiosyncratic
+noise alone.
+
+---
+
+## Two cohorts and distribution shift (v3)
+
+`CohortConfig` holds everything that differs between the development and test cohorts: country
+mix, age Beta parameters, vaper share, whether missingness is injected, the two anomaly rates, and
+the duplicate rate and UK weighting. **Nothing in the causal model varies**, so `P(y | x_clean)`
+is identical and all shift is covariate shift.
+
+### The threshold-reuse requirement
+
+`Sleep Quality`, `Health Issues` and `SelfRatedHealth` are all bucketed at **quantiles computed
+within the call**. If the test cohort recomputed its own quantiles, each of those three would
+re-normalise to exactly the development set's class proportions and **every shift in them would be
+silently erased** — the data would look correct and the drift exercise would have no content.
+
+`generate()` therefore returns the thresholds it computed, and the test call is passed them:
+
+```python
+dev,  thresholds = generate(DEV_CONFIG,  rows,      seed)
+test, _          = generate(TEST_CONFIG, test_rows, seed + 2, thresholds=thresholds)
+```
+
+`HighHealthBurden` needs no such treatment — it is a Bernoulli draw from a sigmoid, so the shifted
+covariates move the positive rate on their own. That is why the label shift is *automatically*
+compositional rather than imposed, which is precisely the property the drift exercise turns on.
+
+### Quality issues, per cohort
+
+Injection is three independent steps so cohorts can take different subsets:
+
+1. **Missing values** — development only. Device fields (`Avg Sleep Hours Per Night` 7%,
+   `Avg Resting Heart Rate` 6%, `Stress Level` 5%) scaled by an age multiplier
+   (0.5 / 0.9 / 1.4 / 2.1 by band); `Health Issues` a flat 10%; plus 5–10 row-level incomplete
+   records. Runs **before** the anomalies, so the age-differential signal is computed on clean ages.
+2. **Anomalies** — both cohorts, development 0.7% age / 0.6% BMI, test 3.0% / 2.5%. Runs **after**
+   the label is drawn, so an anomalous row's label reflects its true values while its features are
+   corrupted.
+3. **Duplicates** — both cohorts, development 0.4% uniform, test 2.0% sampled with UK rows weighted
+   x4.
+
+`HighHealthBurden` joins `ID`, `Country` and `SelfRatedHealth` in the immune set, so no target is
+ever nulled.
 
 ---
 

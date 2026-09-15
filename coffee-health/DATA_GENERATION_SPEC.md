@@ -6,7 +6,146 @@ This document captures the requirements for a redesigned coffee-consumption-and-
 
 **Target Size**: ~10,000 rows, **one row per person** (no multi-entity structure like online-gaming's player-game rows — there's no natural repeating unit here).
 
-**Status**: First draft from the spec dialogue. Treat unchecked items and open questions as normal, not as things to rush to close — see the repo root README.md's note on the iterative spec process.
+**Status**: v3 (coursework redesign) is current. The sections below describe the feature-level
+design, which v3 inherits and extends; the **Version 3** section immediately following records
+what v3 adds and changes. Treat unchecked items and open questions as normal, not as things to
+rush to close — see the repo root README.md's note on the iterative spec process.
+
+> v3 repurposes the dataset to carry a two-assignment unit (EDA, then applied ML). The *why* is
+> in [V3_COURSEWORK_DESIGN.md](V3_COURSEWORK_DESIGN.md); the numbers are here.
+
+---
+
+## Version 3 — coursework redesign
+
+v3 adds a **binary ML target**, two new pieces of feature structure, and a **second cohort**
+(a held-out test set drawn from a shifted recruitment mix). The v1/v2 feature design below is
+unchanged except where noted.
+
+### New features
+
+| Feature | Design |
+|---|---|
+| **Household Income** | Annual, EUR. Log-normal, `median(country) x age_factor x LogNormal(0, 0.42)`, clipped to 12,000–250,000. Country medians: Norway 62k, France 44k, UK 42k, Italy 36k. Rises to a peak around age 52, then eases. Deliberately **large in magnitude, weak in direct signal** — most of its association with health runs *through* activity, smoking and BMI rather than directly, which is honest (the socioeconomic health gradient is real) while ensuring that an unscaled distance metric is dominated by a mostly-uninformative axis. Feature scaling then has something real to fix. |
+| **Smoking Status: `Vaper`** | New level, ordered between `Former` and `Light Smoker`. ~1.5% configured share in development, 9% in test. Note the *observed* development share is ~2.7%, because the income-driven "quit" shift moves some light smokers down a step onto it — switching to vaping as a quit route, which is realistic. |
+
+Income also nudges three existing features: a higher-income person is more likely to be one step
+more active, one step further along the quit scale, and has a modestly lower BMI.
+
+### New target — `HighHealthBurden`
+
+Binary. **Did this person have a high-burden health year in the twelve months after the survey** —
+≥14 days of health-related absence from work or normal activity, **or** ≥6 primary-care contacts?
+
+Drawn as `y ~ Bernoulli(sigmoid(eta))` — a **stochastic draw, not a threshold**, so there is
+irreducible noise and a realistic ceiling rather than a boundary a flexible model could learn
+perfectly. Calibrated to a **~20% positive rate**, which sets the majority-class baseline at 80%
+accuracy: the supplied starter pipeline then scores ~80% while finding nobody.
+
+`eta` has three blocks. The split matters, and is the single most important design decision in v3.
+
+**Linear block** (what logistic regression can capture): intercept −6.565; smoking
+{Never 0, Former .15, Vaper .60, Light .45, Heavy .85}; activity {Sedentary .40, Lightly .12,
+Moderately −.18, Very Active −.40}; stress {Low 0, Medium .30, High .65}; sleep quality
+{Poor .55, Fair .20, Good −.15, Excellent −.45}; health issues {No Issues 0, Mild .45,
+Moderate .90, Severe 1.45}; alcohol {Non-Drinker .05, Light 0, Moderate .12, Heavy .55};
+country {Norway −.40, Italy −.18, France .12, UK .58}; gender {Male 0, Female .10, Other .05};
+0.030 per year above 30; 0.055 per BMI unit outside the 19–25 band; 0.006 per bpm above 70;
+−4.5e-6 per EUR of income above 45,000.
+
+**Non-monotonic block**: `0.72 x (sleep hours − 6.4)^2` and `0.34 x (cups − 2.8)^2`.
+
+> **The centring is the whole point.** Both quadratics are centred on the *middle of the observed
+> distribution*. An earlier draft centred the sleep curve at 7.25 hours — but mean sleep is 6.36
+> hours, so 79% of the data sat on one arm and the term correlated −0.76 with raw hours. A linear
+> model captured it for free and the gap to a tree ensemble was **negative**. Likewise
+> `min(cups, 3)` correlated +0.91 with cups and was, in effect, a linear term wearing a disguise.
+> Re-centring both on the data was what made the non-linearity real.
+
+**Interaction block**: `0.0042 x bmi_deviation x years_over_30`; `0.00125 x caffeine x
+max(0, 7 − sleep hours)`; `0.48 x min(cups, 3) x sleeps_badly` (coffee's protective arm only
+holds for people who sleep well); `+1.15` smoker x BMI≥27; `+1.00` stressed x poor/fair sleep;
+`+1.25` over-55 x sedentary; `−1.05` over-55 x very active. Categorical interactions are defined
+over **broad** groups deliberately: one firing on 2% of rows contributes almost nothing to overall
+performance and cannot reward a more expressive model.
+
+**Noise**: latent frailty `x 1.35`, plus idiosyncratic `N(0, 0.45)`.
+
+### Latent frailty — why `SelfRatedHealth` is a genuine leakage trap
+
+A standard-normal **frailty** term, never written to the CSV, lowers `SelfRatedHealth` (weight
+−18.0) and raises `eta` (weight +1.35).
+
+Without it, `SelfRatedHealth` is a *deterministic-ish function of columns already in the feature
+set*, so a model gains nothing from it — the first v3 draft measured a leakage benefit of
+essentially zero. The shared latent is what makes it informative **beyond** every measured risk
+factor, which is both the mechanism of the trap and real epidemiology: self-rated health predicts
+later mortality and utilisation after adjusting for measured risk factors, because respondents
+incorporate information no questionnaire captures.
+
+Measured effect of including it: **+0.031 AUC, +2.3pp accuracy** — seductive, detectable, and
+not so total that the exercise becomes trivial.
+
+### Two cohorts
+
+| | Development | Held-out test |
+|---|---|---|
+| Rows | 10,000 + 40 duplicates | 3,000 + 60 duplicates |
+| Country mix | 25% each | Italy/France/Norway 18%, **UK 46%** |
+| Age | `Beta(2.0, 3.0) x 57 + 18` (mean 40.7) | `Beta(2.55, 2.60) x 57 + 18` (mean **46.2**) |
+| Vaper share | 1.5% configured (~2.7% observed) | **9%** |
+| Missing values | yes — see below | **none** |
+| Age / BMI anomalies | 0.7% / 0.6% | **3.0% / 2.5%** |
+| Duplicates | 0.4%, uniform | 2.0%, **UK-weighted (x4)** |
+| Positive rate | 19.8% | **25.6%** |
+
+**The causal model is identical between them.** Every coefficient above is shared, so
+`P(y | x_clean)` is unchanged and all shift is covariate shift. There is deliberately **no concept
+drift** — it would leave students with nothing to do but complain, where covariate shift is
+diagnosable and partly fixable.
+
+The higher positive rate therefore emerges *automatically* from the shifted covariates rather than
+being imposed. Reweighting the development set's own within-group rates to the test mix recovers
++0.034 of the +0.058 rise, and the model stays calibrated on the test set (predicted 0.259 vs
+observed 0.256) — which is the decisive evidence that the relationship itself did not move.
+
+### Test-set rules
+
+The test set is supplied as a **clean extract**: no missing values, so student performance cannot
+hinge on how they handled missing data — that is a training-data concern. The only operations
+permitted on it are **encoding and scaling**.
+
+It does carry anomalies and duplicates, at higher rates than development, and those are **for
+analysis, not repair**. Because anomalies are injected *after* the label is drawn, an anomalous
+row carries a label determined by its true values while presenting corrupted ones, so it is close
+to unpredictable by construction — a measurable, separable component of the train/test gap. The
+duplicates are UK-weighted (83% of them), so they are not merely redundant rows but a further
+distortion of the mix.
+
+### Quality-issue injection, split by cohort
+
+Injection is three independent steps — missingness, anomalies, duplicates — each with its own
+per-cohort rate, so the test set can take the last two and not the first. Missingness runs
+**before** the anomalies so the age-differential missingness signal is computed on clean ages.
+
+### Targets the dataset must hit
+
+Enforced by `validate_ml_ladder.py` (23 checks) and `validate_dataset.py` (67 checks):
+
+| Property | Target | Measured |
+|---|---|---|
+| Majority-class accuracy | ~0.80 | 0.802 |
+| Starter pipeline recall | ≤0.45 | 0.000 (predicts all-negative) |
+| Scaling: KNN AUC gain | ≥+0.10 | +0.243 |
+| Class weighting: recall | ≥0.60 | 0.326 → 0.755 |
+| Tuning: KNN AUC gain | ≥+0.03 | +0.086 |
+| Hold-out instability | a pair of models must swap rank | swaps on 4/10 splits |
+| Tree ensemble over LR | +0.03 to +0.10 AUC | +0.056 |
+| Leakage gain | +0.015 to +0.08 AUC | +0.031 |
+| Stakeholder disagreement | different models preferred at 0.5 | agency → LR balanced, employer → GBM |
+| Overfitting: train − CV | ≥+0.03 | +0.073 |
+| Drift: CV − test | +0.015 to +0.08 | +0.025 |
+
 
 ---
 
@@ -82,12 +221,14 @@ Four countries, chosen for meaningfully different coffee/lifestyle/health profil
 
 Occupation has been dropped (see decision log) — Age, Gender, Country are the demographic anchors.
 
+*v3 adds:* **Household Income** — annual EUR, see the Version 3 section.
+
 ### Coffee & Caffeine
 5. **Daily Coffees** — cups, float
 6. **Caffeine Intake** — mg, correlated with Daily Coffees but with country-varying mg/cup, and *not* a perfect correlation: ~10% of people lean decaf/half-caf (still order "coffees" but most cups are low-caffeine), which is what keeps the relationship strong-but-imperfect for a real reason rather than bare noise — see `DATA_GENERATION_ALGORITHM.md`.
 
 ### Lifestyle
-7. **Smoking Status** — {Never, Former, Light Smoker, Heavy Smoker} (replaces binary Smoker) — intensity matters: smoking dose-response (more cigarettes/day → worse outcomes) is one of the most robustly established findings in epidemiology, so collapsing all current smokers into one bucket would throw away a genuinely important, well-grounded relationship. Exact cigarettes/day threshold splitting Light vs. Heavy (proposed: <10/day vs. ≥10/day) still needs to be pinned down in the algorithm doc.
+7. **Smoking Status** — {Never, Former, *Vaper (v3)*, Light Smoker, Heavy Smoker} (replaces binary Smoker) — intensity matters: smoking dose-response (more cigarettes/day → worse outcomes) is one of the most robustly established findings in epidemiology, so collapsing all current smokers into one bucket would throw away a genuinely important, well-grounded relationship. Exact cigarettes/day threshold splitting Light vs. Heavy (proposed: <10/day vs. ≥10/day) still needs to be pinned down in the algorithm doc.
 8. **Alcohol Level** — {Non-Drinker, Light, Moderate, Heavy} (replaces binary Drinks Alcohol)
 9. **Physical Activity Level** — {Sedentary, Lightly Active, Moderately Active, Very Active} (standard 4-tier activity classification; replaces noisy 0-15 numeric) — driven by Age, Country, Stress
 10. **Avg Sleep Hours Per Night** — float. Renamed from "Sleep Hours" for clarity: represents a typical/average nightly value (not a single night), consistent with how this would realistically be captured — self-reported or aggregated from a sleep-tracking wearable (ring, watch, band) over a recent period.
@@ -100,7 +241,9 @@ Occupation has been dropped (see decision log) — Age, Gender, Country are the 
 15. **Health Issues** — {No Issues, Mild, Moderate, Severe} — chronic condition indicator, strengthened links to Age, BMI, Smoking. (Labeled "No Issues" rather than "None" — pandas silently treats the literal string "None" as missing data on CSV read, which would have collided with the deliberate missing-value injection; see `DATA_GENERATION_ALGORITHM.md`'s Implementation Findings.)
 
 ### Target
-16. **SelfRatedHealth** — {Poor, Fair, Good, Very Good, Excellent} — see Target Variable section above
+16. **SelfRatedHealth** — {Poor, Fair, Good, Very Good, Excellent} — see Target Variable section above.
+    *In v3 this is the CW1 EDA target and CW2's leakage trap; it must be excluded from the ML feature set.*
+17. **HighHealthBurden** *(v3)* — binary, the CW2 ML target — see the Version 3 section.
 
 ---
 
