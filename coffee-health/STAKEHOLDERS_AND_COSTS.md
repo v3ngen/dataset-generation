@@ -58,19 +58,23 @@ spend?**
 Costs are per person scored, in euros. Negative numbers are **net benefits** — cases where the
 intervention pays for itself and more.
 
+Rows and columns both lead with the positive case (high-needs / invite), so correct calls sit on
+the diagonal running top-left to bottom-right — **TP** top-left, **TN** bottom-right — matching
+the usual confusion-matrix convention.
+
 ### Stakeholder A — national public health agency
 
-|  | Predicted: no invitation | Predicted: invite |
+|  | Predicted: invite | Predicted: no invitation |
 |---|---|---|
-| **Actually not high-needs** | EUR 0 | **EUR 180** — wasted health check and programme place |
-| **Actually high-needs** | **EUR 1,450** — avoidable downstream primary and secondary care | **EUR -720** — programme cost of 180 offset by an expected 900 in avoided care |
+| **Actually high-needs** | **EUR -720** (TP) — programme cost of 180 offset by an expected 900 in avoided care | **EUR 1,450** (FN) — avoidable downstream primary and secondary care |
+| **Actually not high-needs** | **EUR 180** (FP) — wasted health check and programme place | EUR 0 (TN) |
 
 ### Stakeholder B — employer occupational health
 
-|  | Predicted: no invitation | Predicted: invite |
+|  | Predicted: invite | Predicted: no invitation |
 |---|---|---|
-| **Actually not high-needs** | EUR 0 | **EUR 520** — a scarce programme place consumed for no return |
-| **Actually high-needs** | **EUR 780** — absence cover, temporary staffing, lost productivity | **EUR -80** — programme cost of 520 offset by an expected 600 in avoided absence |
+| **Actually high-needs** | **EUR -80** (TP) — programme cost of 520 offset by an expected 600 in avoided absence | **EUR 780** (FN) — absence cover, temporary staffing, lost productivity |
+| **Actually not high-needs** | **EUR 520** (FP) — a scarce programme place consumed for no return | EUR 0 (TN) |
 
 Note the asymmetry. For the agency a false negative costs about **eight times** a false positive.
 For the employer the ratio is closer to **1.5 to 1**, and in the opposite direction from what the
@@ -243,11 +247,11 @@ Same ten probabilities, three different sets of decisions — nothing about the 
 between columns, only the threshold applied to its output. Reading off the confusion matrix at
 each threshold and pricing it under both matrices:
 
-| Threshold | Confusion (TN, FP, FN, TP) | Cost/person — agency (A) | Cost/person — employer (B) |
+| Threshold | Confusion (TP, FN, FP, TN) | Cost/person — agency (A) | Cost/person — employer (B) |
 |---|---|---|---|
-| 0.50 (default) | 5, 0, 3, 2 | €291.00 | €218.00 |
-| 0.077 (agency's own) | 2, 3, 0, 5 | **−€306.00** | €116.00 |
-| 0.377 (employer's own) | 5, 0, 2, 3 | €74.00 | **€132.00** |
+| 0.50 (default) | 2, 3, 0, 5 | €291.00 | €218.00 |
+| 0.077 (agency's own) | 5, 0, 3, 2 | **−€306.00** | €116.00 |
+| 0.377 (employer's own) | 3, 2, 0, 5 | €74.00 | **€132.00** |
 
 At the default threshold the agency pays €291 per person. At its own threshold it makes a
 **€306 net saving per person** instead — a swing of nearly €600 per person from a decision that

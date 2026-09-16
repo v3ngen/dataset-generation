@@ -268,10 +268,10 @@ generator is ever retuned, run it or the assignment quietly stops working.
 Full scenario prose in [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md); both matrices are in
 `costs.py` and are already used in the starter notebook.
 
-| | TN | FP | FN | TP | Optimal threshold |
+| | TP | FN | FP | TN | Optimal threshold |
 |---|---|---|---|---|---|
-| **National public health agency** | €0 | €180 | **€1,450** | −€720 | **0.077** — wants recall |
-| **Employer occupational health** | €0 | **€520** | €780 | −€80 | **0.377** — wants precision |
+| **National public health agency** | −€720 | **€1,450** | €180 | €0 | **0.077** — wants recall |
+| **Employer occupational health** | −€80 | €780 | **€520** | €0 | **0.377** — wants precision |
 
 The default 0.5 threshold is wrong for both, and at that default the agency prefers the
 class-weighted logistic regression (−€2.8/person vs +€87.5) while the employer prefers the gradient
