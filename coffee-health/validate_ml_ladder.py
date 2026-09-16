@@ -27,12 +27,12 @@ warnings.filterwarnings('ignore')
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, balanced_accuracy_score, f1_score,
-                             recall_score, roc_auc_score)
+                             precision_score, recall_score)
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 
-from costs import COST_EMPLOYER, COST_PUBLIC_HEALTH, cost_per_person, optimal_threshold
+from costs import COST_EMPLOYER, COST_PUBLIC_HEALTH, cost_per_person
 
 SEED = 42
 TARGET = 'HighHealthNeeds'
@@ -116,23 +116,29 @@ def split(X, y, seed=SEED):
     return train_test_split(X, y, test_size=0.2, stratify=y, random_state=seed)
 
 
-def scores(model, X, y, proba=True):
+def scores(model, X, y):
+    """Every metric here is computed from model.predict() alone.
+
+    No predicted probabilities, no decision thresholds: the coursework is scored on
+    the metrics a second-year course already teaches, plus the two stakeholders' cost
+    per person.
+    """
     pred = model.predict(X)
-    out = {
+    return {
         'acc': accuracy_score(y, pred),
         'bal_acc': balanced_accuracy_score(y, pred),
+        'precision': precision_score(y, pred, zero_division=0),
         'recall': recall_score(y, pred),
         'f1': f1_score(y, pred),
         'cost_a': cost_per_person(y, pred, COST_PUBLIC_HEALTH),
         'cost_b': cost_per_person(y, pred, COST_EMPLOYER),
     }
-    out['auc'] = roc_auc_score(y, model.predict_proba(X)[:, 1]) if proba else np.nan
-    return out
 
 
 def show(label, s):
-    print(f'    {label:<34} acc={s["acc"]:.3f}  rec+={s["recall"]:.3f}  '
-          f'auc={s["auc"]:.4f}  costA={s["cost_a"]:+7.1f}  costB={s["cost_b"]:+7.1f}')
+    print(f'    {label:<34} acc={s["acc"]:.3f}  prec={s["precision"]:.3f}  '
+          f'rec={s["recall"]:.3f}  F1={s["f1"]:.4f}  '
+          f'costA={s["cost_a"]:+7.1f}  costB={s["cost_b"]:+7.1f}')
 
 
 # --------------------------------------------------------------------------------------
@@ -200,11 +206,11 @@ def main():
     s_ks = scores(knn_scaled, Sva, yva)
     show('KNN k=5 unscaled', s_ku)
     show('KNN k=5 scaled', s_ks)
-    check(3, 'scaling lifts KNN AUC substantially',
-          s_ks['auc'] - s_ku['auc'] >= 0.10,
-          f'+{s_ks["auc"] - s_ku["auc"]:.4f} AUC')
-    check(3, 'unscaled KNN is close to useless (income dominates the distance)',
-          s_ku['auc'] <= 0.62, f'{s_ku["auc"]:.4f} AUC')
+    check(3, 'scaling lifts KNN F1 substantially',
+          s_ks['f1'] - s_ku['f1'] >= 0.15,
+          f'{s_ku["f1"]:.4f} -> {s_ks["f1"]:.4f}')
+    check(3, 'unscaled KNN finds almost nobody (income dominates the distance)',
+          s_ku['recall'] <= 0.15, f'recall {s_ku["recall"]:.3f}')
 
     # ---------------------------------------------------------------- rung 4
     section('Rung 4 -- class imbalance')
@@ -225,13 +231,39 @@ def main():
 
     # ---------------------------------------------------------------- rung 5
     section('Rung 5 -- hyperparameter tuning')
-    knn_grid = GridSearchCV(KNeighborsClassifier(), {'n_neighbors': [5, 15, 25, 45, 75]},
-                            scoring='roc_auc', cv=3, n_jobs=-1).fit(Str, ytr)
-    s_knn_tuned = scores(knn_grid.best_estimator_, Sva, yva)
-    show(f'KNN tuned (k={knn_grid.best_params_["n_neighbors"]})', s_knn_tuned)
-    check(5, 'tuning k lifts KNN AUC clearly',
-          s_knn_tuned['auc'] - s_ks['auc'] >= 0.03,
-          f'+{s_knn_tuned["auc"] - s_ks["auc"]:.4f} AUC over default k=5')
+    # KNN and logistic regression barely respond to tuning here, so the demonstration
+    # uses a random forest, where the defaults are genuinely bad: an unconstrained
+    # forest overfits this data badly.
+    rf_default = RandomForestClassifier(class_weight='balanced', random_state=SEED,
+                                        n_jobs=-1).fit(Xtr, ytr)
+    s_rf_default = scores(rf_default, Xva, yva)
+    show('RF balanced, all defaults', s_rf_default)
+
+    rf_search = GridSearchCV(
+        RandomForestClassifier(class_weight='balanced', random_state=SEED, n_jobs=-1),
+        {'max_depth': [6, 10, 14, None], 'min_samples_leaf': [1, 5, 20, 50]},
+        scoring='f1', cv=5, n_jobs=-1).fit(Xtr, ytr)
+    rf_tuned = rf_search.best_estimator_
+    s_rf_tuned = scores(rf_tuned, Xva, yva)
+    show(f'RF balanced, tuned {rf_search.best_params_}', s_rf_tuned)
+
+    check(5, 'tuning lifts F1 substantially over the defaults',
+          s_rf_tuned['f1'] - s_rf_default['f1'] >= 0.05,
+          f'{s_rf_default["f1"]:.4f} -> {s_rf_tuned["f1"]:.4f}')
+    check(5, 'tuning also cuts cost for the public health agency',
+          s_rf_tuned['cost_a'] < s_rf_default['cost_a'] - 25,
+          f'{s_rf_default["cost_a"]:+.1f} -> {s_rf_tuned["cost_a"]:+.1f} per person')
+
+    # Tuning is NOT uniformly valuable, and the contrast is worth having: logistic
+    # regression's regularisation strength barely moves anything here. Knowing which
+    # knobs matter for which model family is the actual skill.
+    lr_search = GridSearchCV(
+        LogisticRegression(max_iter=4000, class_weight='balanced'),
+        {'C': [0.01, 0.1, 1.0, 10.0]}, scoring='f1', cv=5, n_jobs=-1).fit(Str, ytr)
+    s_lr_tuned = scores(lr_search.best_estimator_, Sva, yva)
+    show(f'LR balanced, tuned C={lr_search.best_params_["C"]}', s_lr_tuned)
+    print(f'    (tuning LR moved F1 by {s_lr_tuned["f1"] - s_bal["f1"]:+.4f} -- '
+          f'not every model responds)')
 
     # ---------------------------------------------------------------- rung 6
     section('Rung 6 -- validation method')
@@ -281,52 +313,77 @@ def main():
 
     # ---------------------------------------------------------------- rung 7
     section('Rung 7 -- a more expressive model')
-    gbm = HistGradientBoostingClassifier(random_state=SEED).fit(Xtr, ytr)
-    rf = RandomForestClassifier(n_estimators=300, min_samples_leaf=5,
-                                random_state=SEED, n_jobs=-1).fit(Xtr, ytr)
-    s_gbm, s_rf = scores(gbm, Xva, yva), scores(rf, Xva, yva)
-    show('HistGradientBoosting', s_gbm)
-    show('RandomForest', s_rf)
-    gap = s_gbm['auc'] - s_plain['auc']
+    # Compared LIKE FOR LIKE: both class-weighted, both tuned. Comparing an
+    # unweighted tree against a weighted linear model would confound model family
+    # with imbalance handling and prove nothing.
+    weights = np.where(ytr == 1, (ytr == 0).sum() / (ytr == 1).sum(), 1.0)
+    gbm_search = GridSearchCV(
+        HistGradientBoostingClassifier(random_state=SEED),
+        {'max_leaf_nodes': [15, 31, 63], 'learning_rate': [0.05, 0.1],
+         'min_samples_leaf': [20, 50]},
+        scoring='f1', cv=5, n_jobs=-1).fit(Xtr, ytr, sample_weight=weights)
+    gbm = gbm_search.best_estimator_
+    s_gbm = scores(gbm, Xva, yva)
+    show('LR balanced, tuned (linear)', s_lr_tuned)
+    show('GBM balanced, tuned (trees)', s_gbm)
+
+    gap = s_gbm['f1'] - s_lr_tuned['f1']
     check(7, 'a tree ensemble beats logistic regression (non-additive structure)',
-          gap >= 0.03, f'+{gap:.4f} AUC over tuned-scale LR')
-    check(7, 'the gain is not so large that LR looks pointless',
-          gap <= 0.10, f'+{gap:.4f} AUC')
+          gap >= 0.03, f'+{gap:.4f} F1 over tuned class-weighted LR')
+    check(7, 'the gain is not so large that logistic regression looks pointless',
+          gap <= 0.15, f'+{gap:.4f} F1')
 
     # ---------------------------------------------------------------- rung 8
-    section('Rung 8 -- decision threshold and the two stakeholders')
-    p_gbm = gbm.predict_proba(Xva)[:, 1]
-    p_lr_bal = lr_bal.predict_proba(Sva)[:, 1]
-    candidates = {'GBM': p_gbm, 'LR balanced': p_lr_bal}
-    stakeholders = {'A public health': COST_PUBLIC_HEALTH, 'B employer': COST_EMPLOYER}
+    section('Rung 8 -- cost, and the two stakeholders')
+    # The headline finding, and it needs no thresholds: run several plausible models
+    # with plain .predict(), price the confusion matrix under each stakeholder's cost
+    # matrix, and the two stakeholders pick different models.
+    candidates = {
+        'LR balanced': (lr_bal, Sva),
+        'GBM balanced tuned': (gbm, Xva),
+        'RF balanced tuned': (rf_tuned, Xva),
+        'LR unweighted': (lr_plain, Sva),
+    }
+    table = {}
+    for name, (model, features) in candidates.items():
+        s = scores(model, features, yva)
+        table[name] = s
+        print(f'    {name:<22} acc={s["acc"]:.3f}  prec={s["precision"]:.3f}  '
+              f'rec={s["recall"]:.3f}  F1={s["f1"]:.4f}  '
+              f'agency={s["cost_a"]:+8.2f}  employer={s["cost_b"]:+8.2f}')
 
-    at_default, at_optimal = {}, {}
-    for name, prob in candidates.items():
-        for sh, matrix in stakeholders.items():
-            t = optimal_threshold(matrix)
-            at_default[(name, sh)] = cost_per_person(yva, (prob >= 0.5).astype(int), matrix)
-            at_optimal[(name, sh)] = cost_per_person(yva, (prob >= t).astype(int), matrix)
-            print(f'    {name:<12} {sh:<18} p*={t:.3f}  cost@0.5={at_default[(name, sh)]:+7.1f}  '
-                  f'cost@p*={at_optimal[(name, sh)]:+7.1f}  (EUR per person)')
+    best_accuracy = max(table, key=lambda n: table[n]['acc'])
+    best_agency = min(table, key=lambda n: table[n]['cost_a'])
+    best_employer = min(table, key=lambda n: table[n]['cost_b'])
+    print(f'    best by accuracy: {best_accuracy}')
+    print(f'    cheapest for the agency: {best_agency}')
+    print(f'    cheapest for the employer: {best_employer}')
 
-    # The headline finding: at the default threshold the two stakeholders disagree
-    # about which model to deploy. This is what makes "which model is best?" a
-    # question that cannot be answered without asking "best for whom?".
-    pick_default = {sh: min(candidates, key=lambda n: at_default[(n, sh)]) for sh in stakeholders}
-    print(f'    at threshold 0.5:  {pick_default}')
-    check(8, 'at the default threshold the two stakeholders prefer DIFFERENT models',
-          len(set(pick_default.values())) == 2,
-          ', '.join(f'{sh} -> {m}' for sh, m in pick_default.items()))
+    # A model that is better on BOTH precision and recall wins for both stakeholders,
+    # and that is a legitimate outcome -- the interesting case is a pair on the
+    # precision/recall frontier, where neither dominates and the two stakeholders
+    # genuinely disagree. Find such a pair; students comparing their own models will
+    # hit these constantly.
+    reversals = []
+    names = list(table)
+    for i, one in enumerate(names):
+        for other in names[i + 1:]:
+            agency_prefers = one if table[one]['cost_a'] < table[other]['cost_a'] else other
+            employer_prefers = one if table[one]['cost_b'] < table[other]['cost_b'] else other
+            if agency_prefers != employer_prefers:
+                reversals.append((one, other, agency_prefers, employer_prefers))
+    for one, other, ap, ep in reversals:
+        print(f'    DISAGREEMENT  {one} vs {other}:  agency -> {ap},  employer -> {ep}')
 
-    # Costs cross zero, so report absolute improvement per person rather than a
-    # percentage of a sign-changing quantity.
-    gains = {k: at_default[k] - at_optimal[k] for k in at_default}
-    best_gain = max(gains.values())
-    check(8, 'moving off the default threshold saves real money',
-          best_gain >= 25, f'best saving EUR {best_gain:.1f} per person')
-    check(8, 'the two stakeholders want thresholds far apart',
-          abs(optimal_threshold(COST_PUBLIC_HEALTH) - optimal_threshold(COST_EMPLOYER)) >= 0.20,
-          f'{optimal_threshold(COST_PUBLIC_HEALTH):.3f} vs {optimal_threshold(COST_EMPLOYER):.3f}')
+    check(8, 'at least one pair of plausible models splits the two stakeholders',
+          len(reversals) >= 1, f'{len(reversals)} reversing pair(s) found')
+    check(8, 'the most accurate model is not what either stakeholder wants',
+          best_accuracy != best_agency and best_accuracy != best_employer,
+          f'most accurate is {best_accuracy}, agency wants {best_agency}, '
+          f'employer wants {best_employer}')
+    check(8, "the agency's preferred model turns a cost into a net saving",
+          table[best_agency]['cost_a'] < 0,
+          f'{table[best_agency]["cost_a"]:+.2f} per person')
 
     # ---------------------------------------------------------------- rung 9
     section('Rung 9 -- the leakage trap')
@@ -335,11 +392,12 @@ def main():
     gbm_leak = HistGradientBoostingClassifier(random_state=SEED).fit(Xltr, yltr)
     s_leak = scores(gbm_leak, Xlva, ylva)
     show('GBM including SelfRatedHealth', s_leak)
-    leak_gain = s_leak['auc'] - s_gbm['auc']
+    leak_gain = s_leak['f1'] - s_gbm['f1']
     check(9, 'SelfRatedHealth gives a seductive, detectable gain',
-          leak_gain >= 0.015, f'+{leak_gain:.4f} AUC, +{s_leak["acc"]-s_gbm["acc"]:.3f} accuracy')
+          leak_gain >= 0.02,
+          f'+{leak_gain:.4f} F1, {s_gbm["acc"]:.3f} -> {s_leak["acc"]:.3f} accuracy')
     check(9, 'the leak is not so total that the exercise is trivial',
-          leak_gain <= 0.08, f'+{leak_gain:.4f} AUC')
+          leak_gain <= 0.20, f'+{leak_gain:.4f} F1')
 
     # ---------------------------------------------------------------- rung 10
     section('Rung 10 -- train vs cross-validation vs held-out test')
@@ -350,10 +408,10 @@ def main():
                          scoring='accuracy').mean()
     Xt = align(X_test, Xc)
     test_acc = accuracy_score(y_test, gbm_full.predict(Xt))
-    test_auc = roc_auc_score(y_test, gbm_full.predict_proba(Xt)[:, 1])
+    test_f1 = f1_score(y_test, gbm_full.predict(Xt))
     print(f'    resubstitution (train)  acc={resub:.4f}')
     print(f'    5-fold cross-validation acc={cv:.4f}')
-    print(f'    held-out test           acc={test_acc:.4f}  auc={test_auc:.4f}')
+    print(f'    held-out test           acc={test_acc:.4f}  F1={test_f1:.4f}')
     check(10, 'training-set performance overstates reality (overfitting is visible)',
           resub - cv >= 0.03, f'resubstitution exceeds CV by {resub - cv:.3f}')
     check(10, 'the test set is harder than cross-validation suggests (drift is visible)',

@@ -82,7 +82,7 @@ agency would do about it.
 
 ---
 
-## 5. Using the matrices: from predictions to money
+## 5. Using the matrices
 
 ### 5.1 Total cost and cost per person
 
@@ -100,179 +100,85 @@ total_cost = TN*C_TN + FP*C_FP + FN*C_FN + TP*C_TP
 cost_per_person = total_cost / n              where n = TN + FP + FN + TP
 ```
 
-Use cost per person whenever you compare across different-sized groups — the ~2,000-row
-validation split against the smaller held-out test set, say — since the raw total scales with
-group size and isn't otherwise comparable.
+Use cost per person whenever you compare across different-sized groups — your validation split
+against the smaller held-out test set, say — since the raw total scales with group size and isn't
+otherwise comparable.
 
-**Worked example.** Ten people, scored with a threshold of 0.5 (defined properly in §5.2), giving
-a confusion matrix of TN=5, FP=0, FN=3, TP=2 (n=10). Under the public health agency's matrix
-(TN=€0, FP=€180, FN=€1,450, TP=−€720):
+Nothing here needs anything beyond `model.predict()`. You produce predictions exactly as you
+already do, build the confusion matrix exactly as you already do, and price it.
+
+**Worked example.** Ten people, of whom five actually went on to have a year of high health needs.
+The model correctly identified two of them, missed three, and wrongly invited nobody — a confusion
+matrix of TP=2, FN=3, FP=0, TN=5 (n=10). Under the public health agency's matrix (TP=−€720,
+FN=€1,450, FP=€180, TN=€0):
 
 ```
-total_cost      = 5×0 + 0×180 + 3×1,450 + 2×(−720)
-                = 0 + 0 + 4,350 − 1,440
+total_cost      = 2×(−720) + 3×1,450 + 0×180 + 5×0
+                = −1,440 + 4,350 + 0 + 0
                 = €2,910
 
 cost_per_person = 2,910 / 10 = €291.00
 ```
 
 `costs.py` does both steps for you — `total_cost(y_true, y_pred, matrix)` and
-`cost_per_person(y_true, y_pred, matrix)` — so in practice you call the function, not the formula.
-The arithmetic above is here so you know what the function is doing.
+`cost_per_person(y_true, y_pred, matrix)`, plus `cost_summary(y_true, y_pred)` for both
+stakeholders at once. The arithmetic above is here so you know what the function is doing; run
+`python3 costs.py` to see this exact example computed.
 
-### 5.2 From a probability to a decision
+### 5.2 Worked example: why the stakeholders disagree
 
-A classifier doesn't hand you "invite" or "don't invite" directly. `model.predict_proba(X)[:, 1]`
-gives you, for each person, the model's estimate of the probability they will go on to have a
-year of high health needs — a number between 0 and 1, not a decision.
+Here is the whole point of having two matrices. Two models, scored on the same 100 people, of whom
+20 actually had a year of high health needs.
 
-Turning that probability into a decision needs a **threshold** `t`: predict positive (invite) if
-the probability is at least `t`, otherwise predict negative. `model.predict(X)` does exactly this
-with `t` fixed at 0.5, silently — call `.predict()` and you have already made a threshold
-decision, whether you meant to or not.
+**Model R** was trained with `class_weight='balanced'`. It casts a wide net: it catches most of the
+people who needed help, at the price of a lot of unnecessary invitations.
 
-```python
-probabilities = model.predict_proba(X_val)[:, 1]     # P(high health needs), one per person
+**Model P** was trained without class weighting. It is cautious: when it says "invite" it is
+usually right, but it misses more than half the people who needed help.
 
-predictions = (probabilities >= 0.5).astype(int)      # what model.predict() does for you
-```
-
-There is nothing about the number 0.5 that connects to either stakeholder's costs. It is what you
-get if you never think about the threshold at all.
-
-### 5.3 The threshold that minimises expected cost
-
-For one person, with the model's estimated probability `p` that they are a positive case, the
-**expected** cost of each action follows directly from the matrix:
-
-```
-E[cost | invite]     = p × C_TP + (1 − p) × C_FP
-E[cost | don't invite] = p × C_FN + (1 − p) × C_TN
-```
-
-Inviting is the cheaper action exactly when `E[cost | invite] < E[cost | don't invite]`. Solve
-that inequality for `p` and the two sides become equal at:
-
-```
-p* = (C_FP − C_TN) / ((C_FP − C_TN) + (C_FN − C_TP))
-```
-
-**This is computed once, from the four cost numbers alone.** It does not depend on your model,
-your data, or any confusion matrix — it is a property of the stakeholder's economics, not of your
-predictions. `costs.py`'s `optimal_threshold(matrix)` computes it directly from `COST_PUBLIC_HEALTH`
-or `COST_EMPLOYER`.
-
-For the public health agency:
-
-```
-C_FP − C_TN = 180 − 0     = 180        (the extra cost of an unnecessary invitation)
-C_FN − C_TP = 1,450 − (−720) = 2,170   (the extra cost of a missed case)
-
-p* = 180 / (180 + 2,170) = 180 / 2,350 = 0.077
-```
-
-For the employer:
-
-```
-C_FP − C_TN = 520 − 0     = 520
-C_FN − C_TP = 780 − (−80) = 860
-
-p* = 520 / (520 + 860) = 520 / 1,380 = 0.377
-```
-
-Read the formula as a share: `p*` is the fraction of total mistake-cost that comes from false
-alarms. When a miss is far more expensive than a false alarm (the agency: €2,170 against €180),
-that share is small, so `p*` sits close to 0 — invite almost anyone with a meaningful chance of
-being a positive case, because being wrong the false-alarm way is cheap. When the two mistakes
-are closer in cost (the employer: €860 against €520), `p*` sits nearer the middle — invite only
-people you are reasonably confident about.
-
-**Checking it against two people.** Take someone the model rates at `p = 0.15` — above the
-agency's 0.077 threshold:
-
-```
-E[cost | invite]       = 0.15×(−720) + 0.85×180 = −108 + 153 = €45
-E[cost | don't invite] = 0.15×1,450  + 0.85×0    = €217.50
-
-€45 < €217.50  ->  inviting is cheaper. Invite.
-```
-
-And someone rated `p = 0.05` — below it:
-
-```
-E[cost | invite]       = 0.05×(−720) + 0.95×180 = −36 + 171 = €135
-E[cost | don't invite] = 0.05×1,450  + 0.95×0    = €72.50
-
-€135 > €72.50  ->  not inviting is cheaper. Don't invite.
-```
-
-The same check for the employer, at `p = 0.40` (above their 0.377) and `p = 0.25` (below it):
-
-```
-p = 0.40:  E[invite] = 0.40×(−80) + 0.60×520 = €280   E[don't invite] = 0.40×780 = €312   -> invite
-p = 0.25:  E[invite] = 0.25×(−80) + 0.75×520 = €370   E[don't invite] = 0.25×780 = €195   -> don't invite
-```
-
-Quick reference:
-
-| Stakeholder | `p*` | Behaviour |
+| | Model R (class-weighted) | Model P (unweighted) |
 |---|---|---|
-| A — public health agency | **0.077** | Invite aggressively; tolerate many false positives to avoid misses |
-| B — employer | **0.377** | Invite only where reasonably confident; protect the scarce places |
+| TP — correctly invited | 15 | 8 |
+| FN — missed | 5 | 12 |
+| FP — wrongly invited | 25 | 4 |
+| TN — correctly not invited | 55 | 76 |
+| **Accuracy** | 0.70 | **0.84** |
+| **Precision** | 0.375 | **0.667** |
+| **Recall** | **0.75** | 0.40 |
+| **F1** | 0.500 | 0.500 |
 
-**The default 0.5 is wrong for both of them.** Neither stakeholder's interests are served by
-optimising accuracy — §5.4 shows exactly how wrong, in money.
+On the traditional metrics, Model P looks like the better model: it is 14 points more accurate and
+nearly twice as precise. And their F1 scores are **identical** — the metrics cannot separate them.
 
-### 5.4 Worked example: the same ten people, three thresholds
+Now price both confusion matrices under each stakeholder's costs:
 
-Ten people from a validation split, with the model's estimated probability and whether they
-actually went on to have a year of high health needs. *(Ten is small enough to follow by hand —
-real work uses your full validation split, which is a few thousand rows. The 50/50 split of
-outcomes below is exaggerated for the same reason; your real data is roughly 80/20.)*
-
-| Person | Actually high-needs? | Model's `p` | Invite @ 0.50? | Invite @ 0.077 (agency)? | Invite @ 0.377 (employer)? |
-|---|---|---|---|---|---|
-| 1 | No | 0.02 | No | No | No |
-| 2 | No | 0.05 | No | No | No |
-| 3 | No | 0.08 | No | **Yes** | No |
-| 4 | **Yes** | 0.10 | No | **Yes** | No |
-| 5 | No | 0.15 | No | **Yes** | No |
-| 6 | No | 0.25 | No | **Yes** | No |
-| 7 | **Yes** | 0.30 | No | **Yes** | No |
-| 8 | **Yes** | 0.40 | No | **Yes** | **Yes** |
-| 9 | **Yes** | 0.55 | **Yes** | **Yes** | **Yes** |
-| 10 | **Yes** | 0.85 | **Yes** | **Yes** | **Yes** |
-
-Same ten probabilities, three different sets of decisions — nothing about the model changed
-between columns, only the threshold applied to its output. Reading off the confusion matrix at
-each threshold and pricing it under both matrices:
-
-| Threshold | Confusion (TP, FN, FP, TN) | Cost/person — agency (A) | Cost/person — employer (B) |
-|---|---|---|---|
-| 0.50 (default) | 2, 3, 0, 5 | €291.00 | €218.00 |
-| 0.077 (agency's own) | 5, 0, 3, 2 | **−€306.00** | €116.00 |
-| 0.377 (employer's own) | 3, 2, 0, 5 | €74.00 | **€132.00** |
-
-At the default threshold the agency pays €291 per person. At its own threshold it makes a
-**€306 net saving per person** instead — a swing of nearly €600 per person from a decision that
-costs nothing to make, since it uses probabilities the model already produces. The employer's own
-threshold does the same job at a smaller scale, cutting their cost from €218 to €132.
-
-Every number in both tables is exactly the confusion-matrix arithmetic of §5.1, run three times
-against the same ten probabilities. Nothing here is estimated or approximate — you can reproduce
-every cell by hand from the table above, and `costs.py` reproduces it for your actual validation
-predictions in three function calls:
-
-```python
-from costs import COST_PUBLIC_HEALTH, COST_EMPLOYER, cost_per_person, optimal_threshold
-
-probabilities = model.predict_proba(X_val)[:, 1]
-
-for name, matrix in [('agency', COST_PUBLIC_HEALTH), ('employer', COST_EMPLOYER)]:
-    t = optimal_threshold(matrix)
-    predictions = (probabilities >= t).astype(int)
-    print(name, t, cost_per_person(y_val, predictions, matrix))
 ```
+Model R, agency:    15×(−720) + 5×1,450  + 25×180 + 55×0 = €950      -> €9.50   per person
+Model P, agency:     8×(−720) + 12×1,450 +  4×180 + 76×0 = €12,360   -> €123.60 per person
+
+Model R, employer:  15×(−80)  + 5×780    + 25×520 + 55×0 = €15,700   -> €157.00 per person
+Model P, employer:   8×(−80)  + 12×780   +  4×520 + 76×0 = €10,800   -> €108.00 per person
+```
+
+| | Model R | Model P | Who wins |
+|---|---|---|---|
+| Accuracy | 0.70 | **0.84** | Model P |
+| F1 | 0.500 | 0.500 | a tie |
+| **Cost to the agency** | **€9.50** | €123.60 | **Model R** |
+| **Cost to the employer** | €157.00 | **€108.00** | **Model P** |
+
+**Four criteria, three different answers.** Accuracy prefers Model P. F1 cannot tell them apart.
+The agency would pay thirteen times more per person for Model P. The employer would pay about 45%
+more per person for Model R.
+
+Neither stakeholder is wrong, and neither model is wrong. The agency's missed cases cost it €1,450
+each, so a model that misses twelve people out of a hundred is ruinous to it — the 25 unnecessary
+invitations Model R makes are cheap by comparison. The employer pays €520 for each of those
+unnecessary invitations out of a fixed budget, and only €780 when it misses someone, so the same
+wide net is poor value.
+
+This is why "which model is best?" cannot be answered from the metrics alone, and why you are
+asked to report cost per person for both stakeholders alongside them.
 
 ---
 
@@ -280,7 +186,8 @@ for name, matrix in [('agency', COST_PUBLIC_HEALTH), ('employer', COST_EMPLOYER)
 
 1. Report **both** stakeholders' total and per-person cost for every model you evaluate, not just
    accuracy.
-2. Treat the decision threshold as something you tune per stakeholder, and show the effect.
+2. Show how the choices you make in the pipeline — class weighting or resampling above all —
+   move the cost for each stakeholder, not just the accuracy.
 3. Expect the two stakeholders to **disagree about which model is best**, and when they do, say
    so explicitly and explain *why* in terms of the trade-off between precision and recall. A
    model that is better for one may be a poor choice for the other. Identifying that disagreement
@@ -297,17 +204,20 @@ you should be able to prove it with numbers rather than assert it.
 The figures are plausible rather than sourced, and are chosen to produce specific pedagogical
 behaviour:
 
-- The two cost-optimal thresholds (0.077 and 0.377) sit either side of 0.5 in usefulness terms and
-  are far apart, so threshold tuning is worth a great deal and a single operating point cannot
-  serve both stakeholders.
-- The ratios are asymmetric in *opposite directions*, which is what makes a genuine rank reversal
-  between a recall-oriented and a precision-oriented model possible.
+- The ratios are asymmetric in *opposite directions* — roughly 8:1 for the agency, 1.5:1 for the
+  employer — which is what makes a genuine rank reversal between a recall-oriented and a
+  precision-oriented model possible.
 - Both matrices give a net benefit for true positives, so students see that a correct positive
-  prediction creates value rather than merely avoiding loss — which is what makes the agency's
-  very low optimal threshold intuitive rather than arbitrary.
+  prediction creates value rather than merely avoiding loss, rather than every cell being a
+  penalty.
+- The magnitudes are set so that class weighting alone flips the agency from paying out to making
+  a net saving. That keeps the whole exercise reachable with `model.predict()` and the standard
+  metrics: no predicted probabilities and no decision thresholds are needed anywhere.
 
-`validate_ml_ladder.py` asserts that a rank reversal actually occurs between two plausible
-student models under these numbers. If the figures are changed, re-run it.
+`validate_ml_ladder.py` rung 8 asserts that at least one pair of plausible student models splits
+the two stakeholders, and that the most accurate model is what neither of them wants.
+
+If the figures are changed, re-run `validate_ml_ladder.py`.
 
 Currency is euros throughout for simplicity, even though the four countries in the dataset do not
 share one. If that is distracting, it can be relabelled as "cost units" without changing anything.

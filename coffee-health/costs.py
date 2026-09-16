@@ -9,7 +9,7 @@ See STAKEHOLDERS_AND_COSTS.md for the scenario the numbers come from.
 
 Typical use::
 
-    from costs import COST_MATRICES, total_cost, cost_per_person, optimal_threshold
+    from costs import COST_MATRICES, total_cost, cost_per_person
 
     for name, matrix in COST_MATRICES.items():
         print(name, cost_per_person(y_true, y_pred, matrix))
@@ -91,42 +91,6 @@ def cost_per_person(y_true, y_pred, matrix: dict) -> float:
     return total_cost(y_true, y_pred, matrix) / n
 
 
-def optimal_threshold(matrix: dict) -> float:
-    """The probability threshold that minimises expected cost under ``matrix``.
-
-    Predict positive when the expected cost of doing so is lower than the expected
-    cost of predicting negative, which works out as::
-
-        p* = (C_FP - C_TN) / ((C_FP - C_TN) + (C_FN - C_TP))
-
-    There is nothing special about the usual default of 0.5, and for these two
-    stakeholders it is a poor choice for both.
-    """
-    fp = matrix["FP"] - matrix["TN"]
-    fn = matrix["FN"] - matrix["TP"]
-    denominator = fp + fn
-    if denominator <= 0:
-        raise ValueError("cost matrix does not define a finite optimal threshold")
-    return fp / denominator
-
-
-def best_empirical_threshold(y_true, y_prob, matrix: dict, grid=None):
-    """Search a grid of thresholds for the one giving the lowest cost on this data.
-
-    Returns ``(threshold, cost_per_person)``. Useful for checking how close the
-    theoretical :func:`optimal_threshold` gets on a model whose probabilities are
-    imperfectly calibrated -- if the two disagree a lot, that is itself a finding.
-
-    Choose the threshold on validation data, not on the held-out test set.
-    """
-    y_prob = np.asarray(y_prob, dtype=float)
-    if grid is None:
-        grid = np.linspace(0.01, 0.99, 99)
-    costs = [cost_per_person(y_true, (y_prob >= t).astype(int), matrix) for t in grid]
-    best = int(np.argmin(costs))
-    return float(grid[best]), float(costs[best])
-
-
 def cost_summary(y_true, y_pred) -> dict:
     """Per-person cost under every stakeholder, keyed by stakeholder name."""
     return {
@@ -136,5 +100,14 @@ def cost_summary(y_true, y_pred) -> dict:
 
 
 if __name__ == "__main__":
+    # A worked example: 10 people, of whom 5 actually had a year of high health
+    # needs, and a model that correctly identified 2 of them while wrongly
+    # inviting nobody.
+    example_actual    = [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+    example_predicted = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+
+    print(f"counts: {confusion_counts(example_actual, example_predicted)}\n")
     for stakeholder, cost_matrix in COST_MATRICES.items():
-        print(f"{stakeholder:<32} optimal threshold = {optimal_threshold(cost_matrix):.3f}")
+        print(f"{stakeholder:<32} "
+              f"total EUR {total_cost(example_actual, example_predicted, cost_matrix):>9,.0f}   "
+              f"per person EUR {cost_per_person(example_actual, example_predicted, cost_matrix):>8,.2f}")
