@@ -78,37 +78,197 @@ agency would do about it.
 
 ---
 
-## 5. Using them
+## 5. Using the matrices: from predictions to money
 
-Total cost for a set of predictions is just the confusion matrix weighted by the cost matrix:
+### 5.1 Total cost and cost per person
+
+Score a set of predictions against `y_true` and you get a confusion matrix: TN, FP, FN, TP —
+counts of people, not money. Multiply each count by what that cell costs in the stakeholder's
+matrix and add them up:
 
 ```
 total_cost = TN*C_TN + FP*C_FP + FN*C_FN + TP*C_TP
 ```
 
-`costs.py` gives you `total_cost(y_true, y_pred, matrix)` and `cost_per_person(...)`, along with
-`COST_PUBLIC_HEALTH` and `COST_EMPLOYER`. Report cost per person as well as total cost — it is
-easier to interpret and it makes results comparable between the development set and the smaller
-test set.
-
-### The threshold is a decision, not a default
-
-Most classifiers give you a probability and then apply a threshold of 0.5 to turn it into a
-prediction. There is nothing special about 0.5. The threshold that minimises expected cost is:
+**Cost per person** is that same total divided by how many people you scored:
 
 ```
-p* = (C_FP - C_TN) / ((C_FP - C_TN) + (C_FN - C_TP))
+cost_per_person = total_cost / n              where n = TN + FP + FN + TP
 ```
 
-For these two stakeholders that gives:
+Use cost per person whenever you compare across different-sized groups — the ~2,000-row
+validation split against the smaller held-out test set, say — since the raw total scales with
+group size and isn't otherwise comparable.
 
-| Stakeholder | Cost-optimal threshold | Behaviour |
+**Worked example.** Ten people, scored with a threshold of 0.5 (defined properly in §5.2), giving
+a confusion matrix of TN=5, FP=0, FN=3, TP=2 (n=10). Under the public health agency's matrix
+(TN=€0, FP=€180, FN=€1,450, TP=−€720):
+
+```
+total_cost      = 5×0 + 0×180 + 3×1,450 + 2×(−720)
+                = 0 + 0 + 4,350 − 1,440
+                = €2,910
+
+cost_per_person = 2,910 / 10 = €291.00
+```
+
+`costs.py` does both steps for you — `total_cost(y_true, y_pred, matrix)` and
+`cost_per_person(y_true, y_pred, matrix)` — so in practice you call the function, not the formula.
+The arithmetic above is here so you know what the function is doing.
+
+### 5.2 From a probability to a decision
+
+A classifier doesn't hand you "invite" or "don't invite" directly. `model.predict_proba(X)[:, 1]`
+gives you, for each person, the model's estimate of the probability they will go on to have a
+year of high health needs — a number between 0 and 1, not a decision.
+
+Turning that probability into a decision needs a **threshold** `t`: predict positive (invite) if
+the probability is at least `t`, otherwise predict negative. `model.predict(X)` does exactly this
+with `t` fixed at 0.5, silently — call `.predict()` and you have already made a threshold
+decision, whether you meant to or not.
+
+```python
+probabilities = model.predict_proba(X_val)[:, 1]     # P(high health needs), one per person
+
+predictions = (probabilities >= 0.5).astype(int)      # what model.predict() does for you
+```
+
+There is nothing about the number 0.5 that connects to either stakeholder's costs. It is what you
+get if you never think about the threshold at all.
+
+### 5.3 The threshold that minimises expected cost
+
+For one person, with the model's estimated probability `p` that they are a positive case, the
+**expected** cost of each action follows directly from the matrix:
+
+```
+E[cost | invite]     = p × C_TP + (1 − p) × C_FP
+E[cost | don't invite] = p × C_FN + (1 − p) × C_TN
+```
+
+Inviting is the cheaper action exactly when `E[cost | invite] < E[cost | don't invite]`. Solve
+that inequality for `p` and the two sides become equal at:
+
+```
+p* = (C_FP − C_TN) / ((C_FP − C_TN) + (C_FN − C_TP))
+```
+
+**This is computed once, from the four cost numbers alone.** It does not depend on your model,
+your data, or any confusion matrix — it is a property of the stakeholder's economics, not of your
+predictions. `costs.py`'s `optimal_threshold(matrix)` computes it directly from `COST_PUBLIC_HEALTH`
+or `COST_EMPLOYER`.
+
+For the public health agency:
+
+```
+C_FP − C_TN = 180 − 0     = 180        (the extra cost of an unnecessary invitation)
+C_FN − C_TP = 1,450 − (−720) = 2,170   (the extra cost of a missed case)
+
+p* = 180 / (180 + 2,170) = 180 / 2,350 = 0.077
+```
+
+For the employer:
+
+```
+C_FP − C_TN = 520 − 0     = 520
+C_FN − C_TP = 780 − (−80) = 860
+
+p* = 520 / (520 + 860) = 520 / 1,380 = 0.377
+```
+
+Read the formula as a share: `p*` is the fraction of total mistake-cost that comes from false
+alarms. When a miss is far more expensive than a false alarm (the agency: €2,170 against €180),
+that share is small, so `p*` sits close to 0 — invite almost anyone with a meaningful chance of
+being a positive case, because being wrong the false-alarm way is cheap. When the two mistakes
+are closer in cost (the employer: €860 against €520), `p*` sits nearer the middle — invite only
+people you are reasonably confident about.
+
+**Checking it against two people.** Take someone the model rates at `p = 0.15` — above the
+agency's 0.077 threshold:
+
+```
+E[cost | invite]       = 0.15×(−720) + 0.85×180 = −108 + 153 = €45
+E[cost | don't invite] = 0.15×1,450  + 0.85×0    = €217.50
+
+€45 < €217.50  ->  inviting is cheaper. Invite.
+```
+
+And someone rated `p = 0.05` — below it:
+
+```
+E[cost | invite]       = 0.05×(−720) + 0.95×180 = −36 + 171 = €135
+E[cost | don't invite] = 0.05×1,450  + 0.95×0    = €72.50
+
+€135 > €72.50  ->  not inviting is cheaper. Don't invite.
+```
+
+The same check for the employer, at `p = 0.40` (above their 0.377) and `p = 0.25` (below it):
+
+```
+p = 0.40:  E[invite] = 0.40×(−80) + 0.60×520 = €280   E[don't invite] = 0.40×780 = €312   -> invite
+p = 0.25:  E[invite] = 0.25×(−80) + 0.75×520 = €370   E[don't invite] = 0.25×780 = €195   -> don't invite
+```
+
+Quick reference:
+
+| Stakeholder | `p*` | Behaviour |
 |---|---|---|
-| A — public health agency | **~0.077** | Invite aggressively; tolerate many false positives to avoid misses |
-| B — employer | **~0.377** | Invite only where reasonably confident; protect the scarce places |
+| A — public health agency | **0.077** | Invite aggressively; tolerate many false positives to avoid misses |
+| B — employer | **0.377** | Invite only where reasonably confident; protect the scarce places |
 
 **The default 0.5 is wrong for both of them.** Neither stakeholder's interests are served by
-optimising accuracy.
+optimising accuracy — §5.4 shows exactly how wrong, in money.
+
+### 5.4 Worked example: the same ten people, three thresholds
+
+Ten people from a validation split, with the model's estimated probability and whether they
+actually went on to have a year of high health needs. *(Ten is small enough to follow by hand —
+real work uses your full validation split, which is a few thousand rows. The 50/50 split of
+outcomes below is exaggerated for the same reason; your real data is roughly 80/20.)*
+
+| Person | Actually high-needs? | Model's `p` | Invite @ 0.50? | Invite @ 0.077 (agency)? | Invite @ 0.377 (employer)? |
+|---|---|---|---|---|---|
+| 1 | No | 0.02 | No | No | No |
+| 2 | No | 0.05 | No | No | No |
+| 3 | No | 0.08 | No | **Yes** | No |
+| 4 | **Yes** | 0.10 | No | **Yes** | No |
+| 5 | No | 0.15 | No | **Yes** | No |
+| 6 | No | 0.25 | No | **Yes** | No |
+| 7 | **Yes** | 0.30 | No | **Yes** | No |
+| 8 | **Yes** | 0.40 | No | **Yes** | **Yes** |
+| 9 | **Yes** | 0.55 | **Yes** | **Yes** | **Yes** |
+| 10 | **Yes** | 0.85 | **Yes** | **Yes** | **Yes** |
+
+Same ten probabilities, three different sets of decisions — nothing about the model changed
+between columns, only the threshold applied to its output. Reading off the confusion matrix at
+each threshold and pricing it under both matrices:
+
+| Threshold | Confusion (TN, FP, FN, TP) | Cost/person — agency (A) | Cost/person — employer (B) |
+|---|---|---|---|
+| 0.50 (default) | 5, 0, 3, 2 | €291.00 | €218.00 |
+| 0.077 (agency's own) | 2, 3, 0, 5 | **−€306.00** | €116.00 |
+| 0.377 (employer's own) | 5, 0, 2, 3 | €74.00 | **€132.00** |
+
+At the default threshold the agency pays €291 per person. At its own threshold it makes a
+**€306 net saving per person** instead — a swing of nearly €600 per person from a decision that
+costs nothing to make, since it uses probabilities the model already produces. The employer's own
+threshold does the same job at a smaller scale, cutting their cost from €218 to €132.
+
+Every number in both tables is exactly the confusion-matrix arithmetic of §5.1, run three times
+against the same ten probabilities. Nothing here is estimated or approximate — you can reproduce
+every cell by hand from the table above, and `costs.py` reproduces it for your actual validation
+predictions in three function calls:
+
+```python
+from costs import COST_PUBLIC_HEALTH, COST_EMPLOYER, cost_per_person, optimal_threshold
+
+probabilities = model.predict_proba(X_val)[:, 1]
+
+for name, matrix in [('agency', COST_PUBLIC_HEALTH), ('employer', COST_EMPLOYER)]:
+    t = optimal_threshold(matrix)
+    predictions = (probabilities >= t).astype(int)
+    print(name, t, cost_per_person(y_val, predictions, matrix))
+```
 
 ---
 
