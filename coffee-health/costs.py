@@ -25,24 +25,35 @@ import numpy as np
 # The matrices
 # --------------------------------------------------------------------------------------
 
+# Every cell is what the stakeholder actually SPENDS on that person, so no cell is
+# negative and a total cost is never a profit. An earlier version mixed two baselines
+# -- charging the full care cost for a miss while crediting a correct invitation with
+# the care it avoided -- which double-counted and made the agency appear to make money.
+#
+# The programme is assumed to avert 55% of the burden for someone it reaches, so a
+# correctly invited person still costs the programme fee plus the remaining 45%.
+
 #: Stakeholder A. Publicly funded, judged against downstream treatment costs.
-#: Missing someone is roughly eight times as expensive as an unnecessary invitation,
-#: so this stakeholder wants high recall.
+#: A health check plus a programme place is cheap (150) and an unaddressed high-needs
+#: year is expensive (1600), so missing someone costs far more than a wasted place and
+#: this stakeholder wants recall.
 COST_PUBLIC_HEALTH = {
-    "TN": 0,       # correctly not invited: no cost
-    "FP": 180,     # invited unnecessarily: wasted health check and programme place
-    "FN": 1450,    # missed: avoidable primary and secondary care
-    "TP": -720,    # correctly invited: 180 programme cost less ~900 of avoided care
+    "TN": 0,       # correctly not invited: nothing happens, nothing is spent
+    "FP": 150,     # invited unnecessarily: health check and programme place wasted
+    "FN": 1600,    # missed: a full year of avoidable primary and secondary care
+    "TP": 870,     # correctly invited: 150 place + 720 of care the programme cannot avert
 }
 
-#: Stakeholder B. Fixed annual block of programme places, signed off by finance.
-#: A wasted place is nearly as expensive as a miss, so this stakeholder wants high
-#: precision.
+#: Stakeholder B. A fixed annual block of programme places, signed off by finance.
+#: A place is scarce and expensive (450) while an unaddressed year costs the business
+#: 1800 in cover and lost productivity. Because the programme only averts part of that,
+#: catching someone saves 540 while a wasted place costs 450 -- so this stakeholder
+#: needs to be reasonably confident before it spends, and wants precision.
 COST_EMPLOYER = {
-    "TN": 0,       # correctly not invited: no cost
-    "FP": 520,     # invited unnecessarily: a scarce place consumed for no return
-    "FN": 780,     # missed: absence cover, temporary staffing, lost productivity
-    "TP": -80,     # correctly invited: 520 programme cost less ~600 of avoided absence
+    "TN": 0,       # correctly not invited: nothing happens, nothing is spent
+    "FP": 450,     # invited unnecessarily: a scarce block-booked place consumed
+    "FN": 1800,    # missed: absence cover, temporary staffing, lost productivity
+    "TP": 1260,    # correctly invited: 450 place + 810 of absence still not averted
 }
 
 #: Both matrices, keyed by a readable stakeholder name.
@@ -91,6 +102,16 @@ def cost_per_person(y_true, y_pred, matrix: dict) -> float:
     return total_cost(y_true, y_pred, matrix) / n
 
 
+def do_nothing_cost(y_true, matrix: dict) -> float:
+    """Cost per person of inviting nobody at all.
+
+    The reference point every model should be compared against: if a model cannot beat
+    this, the programme is not worth running on its predictions.
+    """
+    y_true = np.asarray(y_true).astype(int)
+    return cost_per_person(y_true, np.zeros_like(y_true), matrix)
+
+
 def cost_summary(y_true, y_pred) -> dict:
     """Per-person cost under every stakeholder, keyed by stakeholder name."""
     return {
@@ -110,4 +131,6 @@ if __name__ == "__main__":
     for stakeholder, cost_matrix in COST_MATRICES.items():
         print(f"{stakeholder:<32} "
               f"total EUR {total_cost(example_actual, example_predicted, cost_matrix):>9,.0f}   "
-              f"per person EUR {cost_per_person(example_actual, example_predicted, cost_matrix):>8,.2f}")
+              f"per person EUR {cost_per_person(example_actual, example_predicted, cost_matrix):>8,.2f}   "
+              f"(inviting nobody would cost "
+              f"EUR {do_nothing_cost(example_actual, cost_matrix):,.2f})")

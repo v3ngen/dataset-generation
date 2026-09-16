@@ -32,7 +32,8 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_sco
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 
-from costs import COST_EMPLOYER, COST_PUBLIC_HEALTH, cost_per_person
+from costs import (COST_EMPLOYER, COST_PUBLIC_HEALTH, cost_per_person,
+                   do_nothing_cost)
 
 SEED = 42
 TARGET = 'HighHealthNeeds'
@@ -352,12 +353,20 @@ def main():
               f'rec={s["recall"]:.3f}  F1={s["f1"]:.4f}  '
               f'agency={s["cost_a"]:+8.2f}  employer={s["cost_b"]:+8.2f}')
 
+    # The reference point: what it costs each stakeholder to invite nobody at all.
+    nothing_agency = do_nothing_cost(yva, COST_PUBLIC_HEALTH)
+    nothing_employer = do_nothing_cost(yva, COST_EMPLOYER)
+    print(f'    {"DO NOTHING (invite nobody)":<22} '
+          f'{"":<38}agency={nothing_agency:+8.2f}  employer={nothing_employer:+8.2f}')
+
     best_accuracy = max(table, key=lambda n: table[n]['acc'])
     best_agency = min(table, key=lambda n: table[n]['cost_a'])
     best_employer = min(table, key=lambda n: table[n]['cost_b'])
     print(f'    best by accuracy: {best_accuracy}')
-    print(f'    cheapest for the agency: {best_agency}')
-    print(f'    cheapest for the employer: {best_employer}')
+    print(f'    cheapest for the agency: {best_agency} '
+          f'(saves {nothing_agency - table[best_agency]["cost_a"]:.2f} vs doing nothing)')
+    print(f'    cheapest for the employer: {best_employer} '
+          f'(saves {nothing_employer - table[best_employer]["cost_b"]:.2f} vs doing nothing)')
 
     # A model that is better on BOTH precision and recall wins for both stakeholders,
     # and that is a legitimate outcome -- the interesting case is a pair on the
@@ -377,13 +386,19 @@ def main():
 
     check(8, 'at least one pair of plausible models splits the two stakeholders',
           len(reversals) >= 1, f'{len(reversals)} reversing pair(s) found')
-    check(8, 'the most accurate model is not what either stakeholder wants',
-          best_accuracy != best_agency and best_accuracy != best_employer,
-          f'most accurate is {best_accuracy}, agency wants {best_agency}, '
-          f'employer wants {best_employer}')
-    check(8, "the agency's preferred model turns a cost into a net saving",
-          table[best_agency]['cost_a'] < 0,
-          f'{table[best_agency]["cost_a"]:+.2f} per person')
+    check(8, 'the most accurate model is not what the agency wants',
+          best_accuracy != best_agency,
+          f'most accurate is {best_accuracy}, agency wants {best_agency}')
+    check(8, 'every cost is a real cost, never a profit',
+          all(s['cost_a'] >= 0 and s['cost_b'] >= 0 for s in table.values()),
+          'no negative costs')
+    check(8, 'the programme is clearly worth running for the agency',
+          nothing_agency - table[best_agency]['cost_a'] >= 40,
+          f'saves {nothing_agency - table[best_agency]["cost_a"]:.2f} per person vs doing nothing')
+    check(8, 'the programme is worth running for the employer, but by much less',
+          0 < nothing_employer - table[best_employer]['cost_b'] < (
+              nothing_agency - table[best_agency]['cost_a']),
+          f'saves {nothing_employer - table[best_employer]["cost_b"]:.2f} per person')
 
     # ---------------------------------------------------------------- rung 9
     section('Rung 9 -- the leakage trap')

@@ -273,8 +273,8 @@ Full scenario prose in [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md); b
 
 | | TP | FN | FP | TN | What it wants |
 |---|---|---|---|---|---|
-| **National public health agency** | −€720 | **€1,450** | €180 | €0 | recall — a miss costs ~8x a false alarm |
-| **Employer occupational health** | −€80 | €780 | **€520** | €0 | precision — the two mistakes cost about the same |
+| **National public health agency** | €870 | **€1,600** | €150 | €0 | recall — cast a wide net |
+| **Employer occupational health** | €1,260 | €1,800 | **€450** | €0 | precision — be selective |
 
 Everything is computed from `model.predict()`: there are no predicted probabilities and no decision
 thresholds anywhere in the assignment. The lever students pull is **class weighting**, and it is

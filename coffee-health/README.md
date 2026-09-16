@@ -50,10 +50,14 @@ Both want to identify the same people for a preventive programme, and pay very d
 mistakes — so they can rank the same models differently. Full scenario in
 [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md).
 
-| | FP | FN | Optimal threshold |
-|---|---|---|---|
-| National public health agency | €180 | €1,450 | **0.077** — wants recall |
-| Employer occupational health | €520 | €780 | **0.377** — wants precision |
+| | TP | FN | FP | TN | What it wants |
+|---|---|---|---|---|---|
+| National public health agency | €870 | **€1,600** | €150 | €0 | recall — a miss costs ~5x a false alarm |
+| Employer occupational health | €1,260 | €1,800 | **€450** | €0 | precision — the two mistakes cost about the same |
+
+Every cell is a real cost, so a total is never a profit. Models are judged against
+`do_nothing_cost()` — what it costs to invite nobody. Everything is computed from
+`model.predict()`: there are no predicted probabilities or decision thresholds anywhere.
 
 ## Test-set rules
 

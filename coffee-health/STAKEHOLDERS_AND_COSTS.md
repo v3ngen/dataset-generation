@@ -55,8 +55,12 @@ spend?**
 
 ## 4. The cost matrices
 
-Costs are per person scored, in euros. Negative numbers are **net benefits** — cases where the
-intervention pays for itself and more.
+Every number is what the stakeholder **spends** on that person over the following year, in euros.
+No cell is negative: a correctly invited person still costs the programme fee, plus whatever
+burden the programme does not manage to avert. Nobody makes money — the goal is to spend less.
+
+Both organisations assume the twelve-week programme averts about **55%** of the burden for
+someone it reaches. That is where the "correctly invited" figures come from.
 
 Rows and columns both lead with the positive case (high-needs / invite), so correct calls sit on
 the diagonal running top-left to bottom-right — **TP** top-left, **TN** bottom-right — matching
@@ -66,19 +70,30 @@ the usual confusion-matrix convention.
 
 |  | Predicted: invite | Predicted: no invitation |
 |---|---|---|
-| **Actually high-needs** | **EUR -720** (TP) — programme cost of 180 offset by an expected 900 in avoided care | **EUR 1,450** (FN) — avoidable downstream primary and secondary care |
-| **Actually not high-needs** | **EUR 180** (FP) — wasted health check and programme place | EUR 0 (TN) |
+| **Actually high-needs** | **EUR 870** (TP) — EUR 150 for the place, plus the EUR 720 of care the programme cannot avert | **EUR 1,600** (FN) — a full year of avoidable primary and secondary care |
+| **Actually not high-needs** | **EUR 150** (FP) — health check and programme place, wasted | EUR 0 (TN) — nothing happens, nothing is spent |
 
 ### Stakeholder B — employer occupational health
 
 |  | Predicted: invite | Predicted: no invitation |
 |---|---|---|
-| **Actually high-needs** | **EUR -80** (TP) — programme cost of 520 offset by an expected 600 in avoided absence | **EUR 780** (FN) — absence cover, temporary staffing, lost productivity |
-| **Actually not high-needs** | **EUR 520** (FP) — a scarce programme place consumed for no return | EUR 0 (TN) |
+| **Actually high-needs** | **EUR 1,260** (TP) — EUR 450 for the place, plus the EUR 810 of absence still not averted | **EUR 1,800** (FN) — absence cover, temporary staffing, lost productivity |
+| **Actually not high-needs** | **EUR 450** (FP) — a scarce block-booked place consumed for no return | EUR 0 (TN) — nothing happens, nothing is spent |
 
-Note the asymmetry. For the agency a false negative costs about **eight times** a false positive.
-For the employer the ratio is closer to **1.5 to 1**, and in the opposite direction from what the
-agency would do about it.
+### What the asymmetry actually is
+
+Comparing two models only ever depends on two quantities: what it costs you to invite someone
+who did not need it, and what it costs you to miss someone who did.
+
+| | Cost of a **false alarm**<br>(FP − TN) | Cost of a **miss**<br>(FN − TP) | Ratio |
+|---|---|---|---|
+| **Agency** | EUR 150 | EUR 730 | **4.9 : 1** — misses hurt far more, so cast a wide net |
+| **Employer** | EUR 450 | EUR 540 | **1.2 : 1** — roughly balanced, so be selective |
+
+The agency's places are cheap and the care it avoids is expensive, so it would much rather
+over-invite. The employer's places are scarce and expensive while the absence it avoids is only
+partly recoverable, so a wasted place costs it nearly as much as a miss. Those two ratios are why
+the same model can be a good buy for one and a bad buy for the other.
 
 ---
 
@@ -86,55 +101,56 @@ agency would do about it.
 
 ### 5.1 Total cost and cost per person
 
-Score a set of predictions against `y_true` and you get a confusion matrix: TN, FP, FN, TP —
-counts of people, not money. Multiply each count by what that cell costs in the stakeholder's
-matrix and add them up:
+Score a set of predictions against `y_true` and you get a confusion matrix: TP, FN, FP, TN —
+counts of people, not money. Multiply each count by what that cell costs and add them up:
 
 ```
-total_cost = TN*C_TN + FP*C_FP + FN*C_FN + TP*C_TP
+total_cost = TP*C_TP + FN*C_FN + FP*C_FP + TN*C_TN
 ```
 
 **Cost per person** is that same total divided by how many people you scored:
 
 ```
-cost_per_person = total_cost / n              where n = TN + FP + FN + TP
+cost_per_person = total_cost / n              where n = TP + FN + FP + TN
 ```
 
 Use cost per person whenever you compare across different-sized groups — your validation split
-against the smaller held-out test set, say — since the raw total scales with group size and isn't
-otherwise comparable.
+against the smaller held-out test set, say — since the raw total scales with group size.
 
-Nothing here needs anything beyond `model.predict()`. You produce predictions exactly as you
-already do, build the confusion matrix exactly as you already do, and price it.
+Nothing here needs anything beyond `model.predict()`.
 
-**Worked example.** Ten people, of whom five actually went on to have a year of high health needs.
-The model correctly identified two of them, missed three, and wrongly invited nobody — a confusion
-matrix of TP=2, FN=3, FP=0, TN=5 (n=10). Under the public health agency's matrix (TP=−€720,
-FN=€1,450, FP=€180, TN=€0):
+**Worked example.** Ten people, of whom five went on to have a year of high health needs. The
+model correctly identified two, missed three, and wrongly invited nobody — TP=2, FN=3, FP=0,
+TN=5:
 
 ```
-total_cost      = 2×(−720) + 3×1,450 + 0×180 + 5×0
-                = −1,440 + 4,350 + 0 + 0
-                = €2,910
-
-cost_per_person = 2,910 / 10 = €291.00
+agency total = 2×870 + 3×1,600 + 0×150 + 5×0
+             = 1,740 + 4,800
+             = EUR 6,540          ->  6,540 / 10 = EUR 654.00 per person
 ```
 
-`costs.py` does both steps for you — `total_cost(y_true, y_pred, matrix)` and
-`cost_per_person(y_true, y_pred, matrix)`, plus `cost_summary(y_true, y_pred)` for both
-stakeholders at once. The arithmetic above is here so you know what the function is doing; run
-`python3 costs.py` to see this exact example computed.
+### 5.2 The number that gives cost its meaning: doing nothing
 
-### 5.2 Worked example: why the stakeholders disagree
+A cost per person means very little on its own. The reference point is **what it would cost to
+invite nobody at all** — no programme, no model, just pay for everyone you missed.
 
-Here is the whole point of having two matrices. Two models, scored on the same 100 people, of whom
-20 actually had a year of high health needs.
+For the ten people above, all five high-needs cases would be missed:
 
-**Model R** was trained with `class_weight='balanced'`. It casts a wide net: it catches most of the
-people who needed help, at the price of a lot of unnecessary invitations.
+```
+agency, invite nobody = 5 × 1,600 = EUR 8,000   ->  EUR 800.00 per person
+```
 
-**Model P** was trained without class weighting. It is cautious: when it says "invite" it is
-usually right, but it misses more than half the people who needed help.
+So that model is worth having: €654 against €800. `costs.py` gives you this as
+`do_nothing_cost(y_true, matrix)`. **A model that cannot beat it is not worth deploying**, however
+good its accuracy looks, and you should report both numbers together.
+
+### 5.3 Worked example: why the stakeholders disagree
+
+Two models, scored on the same 100 people, of whom 20 actually had a year of high health needs.
+
+**Model R** was trained with `class_weight='balanced'` — a wide net, catching most of the people
+who needed help at the price of many unnecessary invitations. **Model P** was trained without it —
+cautious, usually right when it says "invite", but missing more than half the cases.
 
 | | Model R (class-weighted) | Model P (unweighted) |
 |---|---|---|
@@ -147,45 +163,51 @@ usually right, but it misses more than half the people who needed help.
 | **Recall** | **0.75** | 0.40 |
 | **F1** | 0.500 | 0.500 |
 
-On the traditional metrics, Model P looks like the better model: it is 14 points more accurate and
-nearly twice as precise. And their F1 scores are **identical** — the metrics cannot separate them.
+On the traditional metrics Model P looks better: 14 points more accurate and nearly twice as
+precise. Their F1 scores are **identical** — the metrics cannot separate them at all.
 
-Now price both confusion matrices under each stakeholder's costs:
+Now price both, against the do-nothing reference:
 
 ```
-Model R, agency:    15×(−720) + 5×1,450  + 25×180 + 55×0 = €950      -> €9.50   per person
-Model P, agency:     8×(−720) + 12×1,450 +  4×180 + 76×0 = €12,360   -> €123.60 per person
+Model R, agency:    15×870 + 5×1,600  + 25×150 = EUR 24,800  ->  EUR 248.00 per person
+Model P, agency:     8×870 + 12×1,600 +  4×150 = EUR 26,760  ->  EUR 267.60 per person
+        agency, invite nobody:        20×1,600 = EUR 32,000  ->  EUR 320.00 per person
 
-Model R, employer:  15×(−80)  + 5×780    + 25×520 + 55×0 = €15,700   -> €157.00 per person
-Model P, employer:   8×(−80)  + 12×780   +  4×520 + 76×0 = €10,800   -> €108.00 per person
+Model R, employer:  15×1,260 + 5×1,800  + 25×450 = EUR 39,150  ->  EUR 391.50 per person
+Model P, employer:   8×1,260 + 12×1,800 +  4×450 = EUR 33,480  ->  EUR 334.80 per person
+        employer, invite nobody:         20×1,800 = EUR 36,000  ->  EUR 360.00 per person
 ```
 
-| | Model R | Model P | Who wins |
-|---|---|---|---|
-| Accuracy | 0.70 | **0.84** | Model P |
-| F1 | 0.500 | 0.500 | a tie |
-| **Cost to the agency** | **€9.50** | €123.60 | **Model R** |
-| **Cost to the employer** | €157.00 | **€108.00** | **Model P** |
+| | Model R | Model P | Invite nobody | Who wins |
+|---|---|---|---|---|
+| Accuracy | 0.70 | **0.84** | 0.80 | Model P |
+| F1 | 0.500 | 0.500 | 0 | a tie |
+| **Cost to the agency** | **€248.00** | €267.60 | €320.00 | **Model R** |
+| **Cost to the employer** | €391.50 | **€334.80** | €360.00 | **Model P** |
 
-**Four criteria, three different answers.** Accuracy prefers Model P. F1 cannot tell them apart.
-The agency would pay thirteen times more per person for Model P. The employer would pay about 45%
-more per person for Model R.
+**Three criteria, three different answers.** Accuracy prefers Model P. F1 cannot tell them apart.
+The agency prefers Model R. The employer prefers Model P.
 
-Neither stakeholder is wrong, and neither model is wrong. The agency's missed cases cost it €1,450
-each, so a model that misses twelve people out of a hundred is ruinous to it — the 25 unnecessary
-invitations Model R makes are cheap by comparison. The employer pays €520 for each of those
-unnecessary invitations out of a fixed budget, and only €780 when it misses someone, so the same
-wide net is poor value.
+And there is a fourth finding hiding in the table, which is the one worth writing up:
+**Model R is worse than useless to the employer.** At €391.50 per person it costs more than not
+running the programme at all (€360.00). A model can be a perfectly good model, clearly better than
+nothing for one customer, and still be something the other customer should refuse to deploy.
+
+Neither stakeholder is wrong. The agency pays €1,600 for every miss and only €150 for a wasted
+place, so Model R's 25 unnecessary invitations are cheap next to the seven extra cases it catches.
+The employer pays €450 a place out of a fixed budget and recovers only part of the absence cost,
+so the same wide net destroys value.
 
 This is why "which model is best?" cannot be answered from the metrics alone, and why you are
-asked to report cost per person for both stakeholders alongside them.
+asked to report cost per person for both stakeholders — against the do-nothing baseline —
+alongside them.
 
 ---
 
 ## 6. What you are expected to do with this
 
-1. Report **both** stakeholders' total and per-person cost for every model you evaluate, not just
-   accuracy.
+1. Report **both** stakeholders' cost per person for every model you evaluate, not just accuracy,
+   and always alongside the do-nothing baseline so the number means something.
 2. Show how the choices you make in the pipeline — class weighting or resampling above all —
    move the cost for each stakeholder, not just the accuracy.
 3. Expect the two stakeholders to **disagree about which model is best**, and when they do, say
@@ -204,12 +226,16 @@ you should be able to prove it with numbers rather than assert it.
 The figures are plausible rather than sourced, and are chosen to produce specific pedagogical
 behaviour:
 
-- The ratios are asymmetric in *opposite directions* — roughly 8:1 for the agency, 1.5:1 for the
-  employer — which is what makes a genuine rank reversal between a recall-oriented and a
-  precision-oriented model possible.
-- Both matrices give a net benefit for true positives, so students see that a correct positive
-  prediction creates value rather than merely avoiding loss, rather than every cell being a
-  penalty.
+- The false-alarm to miss ratios are roughly 4.9:1 for the agency and 1.2:1 for the employer,
+  which is what makes a genuine rank reversal between a recall-oriented and a precision-oriented
+  model possible.
+- Every cell is a real cost, so a total is never a profit. An earlier version credited a correct
+  invitation with the care it avoided while still charging the full care cost for a miss, which
+  double-counted two different baselines and made the agency appear to make money. Each matrix now
+  reads as "what we spend on this person", with `do_nothing_cost()` as the reference point.
+- The magnitudes are set so the programme is clearly worth running for the agency (the best model
+  saves it around EUR 90 per person against doing nothing) and only marginally so for the employer
+  (around EUR 20), which is what makes the employer genuinely choosy.
 - The magnitudes are set so that class weighting alone flips the agency from paying out to making
   a net saving. That keeps the whole exercise reachable with `model.predict()` and the standard
   metrics: no predicted probabilities and no decision thresholds are needed anywhere.
