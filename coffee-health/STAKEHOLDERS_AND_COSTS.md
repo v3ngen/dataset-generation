@@ -152,19 +152,33 @@ Two models, scored on the same 100 people, of whom 20 actually had a year of hig
 who needed help at the price of many unnecessary invitations. **Model P** was trained without it —
 cautious, usually right when it says "invite", but missing more than half the cases.
 
-| | Model R (class-weighted) | Model P (unweighted) |
-|---|---|---|
-| TP — correctly invited | 15 | 8 |
-| FN — missed | 5 | 12 |
-| FP — wrongly invited | 25 | 4 |
-| TN — correctly not invited | 55 | 76 |
-| **Accuracy** | 0.70 | **0.84** |
-| **Precision** | 0.375 | **0.667** |
-| **Recall** | **0.75** | 0.40 |
-| **F1** | 0.500 | 0.500 |
+The third column is the do-nothing baseline from §5.2 — invite nobody — scored the same way, so
+it can be compared against directly.
+
+| | Model R (class-weighted) | Model P (unweighted) | Invite nobody |
+|---|---|---|---|
+| TP — correctly invited | 15 | 8 | 0 |
+| FN — missed | 5 | 12 | 20 |
+| FP — wrongly invited | 25 | 4 | 0 |
+| TN — correctly not invited | 55 | 76 | 80 |
+| **Accuracy** | 0.70 | **0.84** | 0.80 |
+| **Precision** | 0.375 | **0.667** | *undefined* |
+| **Recall** | **0.75** | 0.40 | 0.00 |
+| **F1** | 0.500 | 0.500 | *undefined* |
 
 On the traditional metrics Model P looks better: 14 points more accurate and nearly twice as
 precise. Their F1 scores are **identical** — the metrics cannot separate them at all.
+
+**Why two of those cells say "undefined".** Precision is `TP / (TP + FP)` — of the people you
+invited, how many needed it. Invite nobody and that is `0 / 0`: there is no set of invitations to
+be right or wrong about, so the question has no answer. F1 is built from precision, so it is
+undefined too.
+
+Worth knowing because you will meet this in code: `precision_score` and `f1_score` both **return
+0.0** here rather than failing, and raise an `UndefinedMetricWarning` saying the metric is
+ill-defined. A 0.0 that actually means "not applicable" is easy to read as "scored zero", and the
+two are not the same thing. Recall and accuracy are both perfectly well defined — 0.00 and 0.80 —
+and that pairing is the whole problem with accuracy on this dataset in one line.
 
 Now price both, against the do-nothing reference:
 
@@ -181,12 +195,19 @@ Model P, employer:   8×1,260 + 12×1,800 +  4×450 = EUR 33,480  ->  EUR 334.80
 | | Model R | Model P | Invite nobody | Who wins |
 |---|---|---|---|---|
 | Accuracy | 0.70 | **0.84** | 0.80 | Model P |
-| F1 | 0.500 | 0.500 | 0 | a tie |
+| Precision | 0.375 | **0.667** | *undefined* | Model P |
+| Recall | **0.75** | 0.40 | 0.00 | Model R |
+| F1 | 0.500 | 0.500 | *undefined* | a tie |
 | **Cost to the agency** | **€248.00** | €267.60 | €320.00 | **Model R** |
 | **Cost to the employer** | €391.50 | **€334.80** | €360.00 | **Model P** |
 
-**Three criteria, three different answers.** Accuracy prefers Model P. F1 cannot tell them apart.
-The agency prefers Model R. The employer prefers Model P.
+**Four criteria, four different answers.** Accuracy and precision prefer Model P. Recall prefers
+Model R. F1 cannot tell them apart. The agency prefers Model R; the employer prefers Model P.
+
+Note where the do-nothing column sits: it beats Model R on accuracy, and it is only four points
+behind Model P — a "model" that does nothing at all, requires no data and finds nobody is within
+four points of your best accuracy score. It is last on recall and last on cost for the agency,
+which is where its uselessness finally shows up.
 
 And there is a fourth finding hiding in the table, which is the one worth writing up:
 **Model R is worse than useless to the employer.** At €391.50 per person it costs more than not
