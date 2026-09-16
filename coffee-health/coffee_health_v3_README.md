@@ -50,8 +50,8 @@ Release the test set whenever suits the unit — for example after CW1 has been 
 **`SelfRatedHealth`** — the 5-class EDA target for CW1. In CW2 it is a **leakage trap**: it must be
 excluded from the feature set, because (a) it comes from a survey that is not run on the deployment
 population, and (b) it shares a latent frailty term with the outcome, so it is a partial observation
-of the thing being predicted. Including it gains +0.030 AUC. It is then useful again for CW2 error
-analysis, as a segmentation variable.
+of the thing being predicted. Including it gains +0.025 F1 and over six points of accuracy. It is
+then useful again for CW2 error analysis, as a segmentation variable.
 
 **`HighHealthNeeds`** — binary: did this person have ≥14 days of health-related absence, **or** ≥6
 primary-care contacts, in the twelve months after the survey? Development 19.8% positive, test 25.6%.
@@ -204,15 +204,17 @@ stale. It is not.
 
 - Reweighting the development set's own within-group rates (country × age band × smoking) to the
   test set's composition recovers **+0.034 of the +0.058** rise.
-- The model, fitted entirely on development data, stays **calibrated** on the test set: mean
-  predicted risk **0.259** against an observed **0.256**.
+- Within each country, the model's **precision barely moves** (mean absolute gap ~5pp) and recall
+  mostly rises. A model whose learned relationship had gone stale would get *worse* at identifying
+  cases inside a country, not better.
 
 So the relationship between features and outcome is intact; what changed is *who was recruited*.
-The model does not need retraining — but its **operating threshold and expected cost do**, because
-both were chosen against a different risk mix.
+The model does not need retraining — but the **costs each stakeholder should expect do need
+recalculating**, because they were estimated against a population with a different mix.
 
-Coarse stratification tells you *which variables* drive the shift; calibration tells you *whether
-the relationship itself* moved. The second is the decisive test, and is worth teaching as such.
+Coarse stratification tells you *which variables* drive the shift; per-subgroup precision and
+recall tell you *whether the relationship itself* moved. The second is the decisive test, and is
+worth teaching as such.
 
 ### Why test performance is lower — three separable layers
 
@@ -223,10 +225,10 @@ the relationship itself* moved. The second is the decisive test, and is worth te
    Duplicates compound this: a duplicated row the model gets wrong is counted twice.
 3. **Covariate shift** — as above.
 
-**Accuracy falls while AUC rises** (CV 0.8827 → test 0.8917). The model's *ranking* holds up; a
-fixed threshold simply converts it into more errors when more of the population is genuinely
-high-risk, and the majority-class baseline is harder to beat. Reporting accuracy alone makes this
-look like model failure. It is not.
+**Accuracy falls while precision and recall hold or improve.** Within each country the model's
+precision moves by about five percentage points and its recall mostly rises; what falls is
+accuracy, the metric most sensitive to how common the positive class is. Reporting accuracy alone
+makes this look like model failure. It is not.
 
 ---
 
@@ -238,23 +240,24 @@ generator is ever retuned, run it or the assignment quietly stops working.
 
 | Rung | Change | Headline effect |
 |---|---|---|
-| 0 | Predict the majority class | accuracy **0.802**, recall 0 |
-| 1 | **Starter pipeline** — defaults, unscaled, single split, accuracy | **both models score below the 0.802 trivial baseline**: LR 0.797 finding 4 of 293 cases, KNN 0.766 finding 17 |
-| 2 | Repair anomalies, impute rather than drop | +35% training rows; GBM +0.005 test AUC, LR slightly worse. **Justified on bias, not accuracy** |
-| 3 | Feature scaling | KNN AUC **0.525 → 0.768**. Barely affects logistic regression |
-| 4 | Class weighting or SMOTE | recall **0.326 → 0.755**; balanced accuracy +0.09; agency cost **+€154 → −€3** per person |
-| 5 | Hyperparameter tuning | KNN AUC +0.086 (optimum **k≈105**, not 5). Tuning LR's `C` changes almost nothing |
+| 0 | Predict the majority class | accuracy **0.804**, recall 0 |
+| 1 | **Starter pipeline** — defaults, unscaled, single split, accuracy | accuracy 0.830 against a 0.804 baseline, but **recall 0.156** — it finds almost nobody |
+| 2 | Repair anomalies, impute rather than drop | +35% training rows; small and model-dependent gain. **Justified on bias, not accuracy** |
+| 3 | Feature scaling | KNN F1 **0.107 → 0.403**; unscaled recall is 0.068. Barely affects logistic regression |
+| 4 | Class weighting or SMOTE | recall **0.326 → 0.755**; balanced accuracy +0.118; agency cost **+€154 → −€3** per person |
+| 5 | Hyperparameter tuning | random forest F1 **0.451 → 0.601**, recall 0.333 → 0.664, agency cost €149 → €21. Tuning LR's `C` changes almost nothing |
 | 6 | Cross-validation / repeated hold-out | two models with means **0.5800 and 0.5802** swap rank on **4/10** splits |
-| 7 | Gradient boosting / random forest | **+0.056 AUC** over tuned logistic regression |
-| 8 | Threshold chosen from the cost matrix | best saving **€145/person**; **the two stakeholders prefer different models** |
-| 9 | Spotting the leak | including `SelfRatedHealth` gives +0.030 AUC / +2.7pp accuracy |
-| 10 | Train vs CV vs test | **0.925 → 0.851 → 0.826** |
+| 7 | Gradient boosting vs logistic regression, like for like | **+0.070 F1** (0.555 → 0.625), both class-weighted and tuned |
+| 8 | Pricing models with the cost matrices | the most accurate model is **worst for both** customers; pairs of models split the two stakeholders |
+| 9 | Spotting the leak | including `SelfRatedHealth` gives +0.025 F1 and +6.6pp accuracy |
+| 10 | Train vs CV vs test | **0.925 → 0.851 → 0.826** accuracy |
 
 ### Traps worth marking for
 
-- **Optimising the wrong thing.** Tuning KNN for AUC *improves* ranking (0.768 → 0.854) while making
-  recall and cost *worse*, because predictions are still taken at 0.5 and a 105-neighbour model
-  produces compressed probabilities that rarely cross it.
+- **Optimising the wrong thing.** Accuracy is the default instinct and it is the wrong objective
+  here: the model with the best accuracy in the whole exercise is the one that costs both
+  stakeholders the most, because accuracy is dominated by the 80% of people who were never going
+  to have a high-needs year.
 - **Improvements that pay nothing on their own.** Better cleaning does not move the headline metric
   until scaling and class weighting are also in place. Reporting a change that did not help, and
   arguing for keeping it anyway, is stronger work than hiding it.
@@ -268,15 +271,16 @@ generator is ever retuned, run it or the assignment quietly stops working.
 Full scenario prose in [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md); both matrices are in
 `costs.py` and are already used in the starter notebook.
 
-| | TP | FN | FP | TN | Optimal threshold |
+| | TP | FN | FP | TN | What it wants |
 |---|---|---|---|---|---|
-| **National public health agency** | −€720 | **€1,450** | €180 | €0 | **0.077** — wants recall |
-| **Employer occupational health** | −€80 | €780 | **€520** | €0 | **0.377** — wants precision |
+| **National public health agency** | −€720 | **€1,450** | €180 | €0 | recall — a miss costs ~8x a false alarm |
+| **Employer occupational health** | −€80 | €780 | **€520** | €0 | precision — the two mistakes cost about the same |
 
-The default 0.5 threshold is wrong for both, and at that default the agency prefers the
-class-weighted logistic regression (−€2.8/person vs +€87.5) while the employer prefers the gradient
-boosting model (+€97.1 vs +€125.5). "Which model is best?" cannot be answered without "best for
-whom?".
+Everything is computed from `model.predict()`: there are no predicted probabilities and no decision
+thresholds anywhere in the assignment. The lever students pull is **class weighting**, and it is
+enough to split the two customers — logistic regression with and without
+`class_weight='balanced'` is preferred by opposite stakeholders. "Which model is best?" cannot be
+answered without "best for whom?".
 
 ### A deliberate design choice worth knowing about
 

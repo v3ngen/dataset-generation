@@ -118,11 +118,17 @@ Full brief-ready prose and the cost matrices live in
 [STAKEHOLDERS_AND_COSTS.md](STAKEHOLDERS_AND_COSTS.md); both matrices are mirrored in code in
 [costs.py](costs.py) and are part of the starter notebook alongside accuracy.
 
-In summary: a **national public health agency** whose false negatives are catastrophic
-(cost-optimal threshold ~0.077, strongly recall-oriented) and an **employer occupational health
-team** with a capped budget whose false positives are expensive (cost-optimal threshold ~0.377,
-precision-oriented). The default 0.5 threshold is wrong for both. Models can — and should —
-legitimately swap rank between the two.
+In summary: a **national public health agency** whose false negatives are catastrophic (a miss
+costs it roughly eight times a false alarm, so it wants recall) and an **employer occupational
+health team** with a capped budget whose false positives are expensive (its two mistakes cost
+about the same, so it wants precision). Models can — and should — legitimately swap rank between
+the two.
+
+Everything is computed from `model.predict()`. **No predicted probabilities and no decision
+thresholds appear anywhere in the assignment** — that was judged too much conceptual load for a
+second-year unit carrying two assignments. The lever that splits the two stakeholders is class
+weighting, which students already have to engage with for the imbalance rung: logistic regression
+with and without `class_weight='balanced'` is preferred by opposite customers.
 
 ---
 
@@ -134,7 +140,7 @@ legitimately swap rank between the two.
 | **Feature scaling** | `Household Income` (~EUR 15k-150k) is large in magnitude but weak in signal. Unscaled KNN/MLP distance is dominated by near-noise while the informative features sit on small scales, so scaling produces a large and unmistakable jump. It also earns its keep in CW1, since the socioeconomic health gradient is real |
 | **Class imbalance handling** | 20% positive, overlapping class-conditional distributions and dense mass near the boundary, so class weighting or SMOTE moves positive-class recall from ~0.25 to ~0.60 and slashes cost under the public-health matrix |
 | **Hyperparameter tuning** | A noisy latent model with a smooth boundary makes KNN's default `k=5` badly suboptimal (optimum ~30-60), and an unscaled MLP at defaults fails to converge |
-| **A more expressive model** | The interactions and the U- and J-shaped terms are invisible to logistic regression on raw features; a tuned gradient-boosted tree should gain ~0.03-0.05 AUC over tuned LR. **This is the change v2 most needs** |
+| **A more expressive model** | The interactions and the U- and J-shaped terms are invisible to logistic regression on raw features; a tuned gradient-boosted tree gains ~0.07 F1 over a tuned, class-weighted LR. **This is the change v2 most needs** |
 | **Better validation** | With ~400 positives in a 20% hold-out, minority-class recall and F1 vary by roughly +/-3-4pp across split seeds — enough to flip model rankings, so students can *demonstrate* that single hold-out is unreliable rather than being told |
 
 ---
@@ -217,16 +223,20 @@ whole ladder with fixed seeds and **fails** if a rung does not pay off.
 | Rung | Setup | Assertion |
 |---|---|---|
 | 0 | Majority-class baseline | accuracy ~0.80, positive recall 0 |
-| 1 | Starter notebook pipeline | accuracy 0.79-0.82, positive recall 0.15-0.30 |
-| 2 | + better data-quality handling | +1-2pp |
-| 3 | + feature scaling | KNN +3-5pp; MLP large jump |
-| 4 | + class weights / SMOTE | positive recall >= 0.60; balanced accuracy +>= 8pp; large cost drop under matrix A |
-| 5 | + hyperparameter tuning | +2-4pp |
-| 6 | + cross-validation | hold-out standard deviation across seeds >= 1.5pp on F1 |
-| 7 | + gradient boosting / random forest | AUC +0.03-0.05 over tuned LR |
-| 8 | + threshold and cost optimisation | cost down >= 25% under A, >= 10% under B, **and model ranking differs between A and B** |
-| 9 | Leakage check | adding `SelfRatedHealth` gives +8-12pp |
-| 10 | Train/test gap | resubstitution > CV > test; test 2-4pp below CV |
+| 1 | Starter notebook pipeline | accuracy near the baseline, positive recall <= 0.45 |
+| 2 | + better data-quality handling | +35% training rows retained |
+| 3 | + feature scaling | KNN F1 +>= 0.15; unscaled recall <= 0.15 |
+| 4 | + class weights / SMOTE | positive recall >= 0.60; balanced accuracy +>= 0.06; large cost drop under matrix A |
+| 5 | + hyperparameter tuning | random forest F1 +>= 0.05 over defaults, and a large agency-cost drop |
+| 6 | + cross-validation | a pair of models swaps rank across hold-out seeds |
+| 7 | + gradient boosting, like for like | F1 +0.03-0.15 over tuned class-weighted LR |
+| 8 | + pricing with the cost matrices | >= 1 pair of models splits the two stakeholders; the most accurate model is what neither wants |
+| 9 | Leakage check | adding `SelfRatedHealth` gives +0.02-0.20 F1 |
+| 10 | Train/test gap | resubstitution > CV > test; test 1.5-8pp below CV |
+
+Every assertion is computed from `model.predict()`. AUC is deliberately absent: it cannot be
+explained without the decision-threshold concept, so keeping it while removing thresholds would
+have been incoherent.
 
 This script is also the **generation loop tool**: the latent-model coefficients are tuned until
 every rung passes. Expect several generate-validate-adjust iterations.

@@ -84,7 +84,7 @@ factor, which is both the mechanism of the trap and real epidemiology: self-rate
 later mortality and utilisation after adjusting for measured risk factors, because respondents
 incorporate information no questionnaire captures.
 
-Measured effect of including it: **+0.030 AUC, +2.7pp accuracy** — seductive, detectable, and
+Measured effect of including it: **+0.025 F1, +6.6pp accuracy** — seductive, detectable, and
 not so total that the exercise becomes trivial. Within each self-rated-health level the
 high-needs rate runs 65.7% (Poor) down to 1.6% (Excellent): strongly informative, nowhere near
 deterministic.
@@ -137,15 +137,15 @@ Enforced by `validate_ml_ladder.py` (23 checks) and `validate_dataset.py` (67 ch
 
 | Property | Target | Measured |
 |---|---|---|
-| Majority-class accuracy | ~0.80 | 0.802 |
-| Starter pipeline recall | ≤0.45 | 0.014 — below the trivial baseline on accuracy too |
-| Scaling: KNN AUC gain | ≥+0.10 | +0.243 |
+| Majority-class accuracy | ~0.80 | 0.804 |
+| Starter pipeline recall | ≤0.45 | 0.156 |
+| Scaling: KNN F1 gain | ≥+0.15 | 0.107 → 0.403 |
 | Class weighting: recall | ≥0.60 | 0.326 → 0.755 |
-| Tuning: KNN AUC gain | ≥+0.03 | +0.086 |
+| Tuning: RF F1 gain | ≥+0.05 | 0.451 → 0.601 |
 | Hold-out instability | a pair of models must swap rank | swaps on 4/10 splits |
-| Tree ensemble over LR | +0.03 to +0.10 AUC | +0.056 |
-| Leakage gain | +0.015 to +0.08 AUC | +0.030 |
-| Stakeholder disagreement | different models preferred at 0.5 | agency → LR balanced, employer → GBM |
+| Tree ensemble over LR (like for like) | +0.03 to +0.15 F1 | +0.070 |
+| Leakage gain | +0.02 to +0.20 F1 | +0.025 |
+| Stakeholder disagreement | ≥1 pair of models split them | 2 pairs |
 | Overfitting: train − CV | ≥+0.03 | +0.073 |
 | Drift: CV − test | +0.015 to +0.08 | +0.025 |
 
